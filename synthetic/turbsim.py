@@ -3,7 +3,7 @@ import sys,os
 import time
 import numpy as np
 
-from inflow import inflow_profile
+from inflow import base
 from binario import binaryfile
 
 #from memory_profiler import profile #-- THIS IS SLOW
@@ -11,7 +11,7 @@ from binario import binaryfile
 #   mprof run turbsim_bts.py
 #   mprof plot
 
-class bts(inflow_profile.basic):
+class bts(base.specified_profile):
 
     def __init__(self, fname, Umean=None, verbose=False):
         """Processes binary full-field time series output from TurbSim.

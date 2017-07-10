@@ -9,12 +9,12 @@ import VTKwriter
 
 import time
 
-class basic(object):
+class specified_profile(object):
 
     realtype = np.float32
 
     def __init__(self, verbose=False):
-        """Stub for basic inflow type"""
+        """Stub for basic inflow with specified mean profiles"""
         self.verbose = verbose
         self.Umean = None
 
