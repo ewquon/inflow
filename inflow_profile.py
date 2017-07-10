@@ -9,12 +9,15 @@ import VTKwriter
 
 import time
 
-class basic:
+class basic(object):
+
     realtype = np.float32
 
     def __init__(self, verbose=False):
         """Stub for basic inflow type"""
         self.verbose = verbose
+        self.Umean = None
+
 
         self.meanProfilesSet = False
         self.meanProfilesRead = False
@@ -41,6 +44,7 @@ class basic:
 
         self.meanProfilesRead = True
 
+
     def readAllProfiles(self,fname='averagingProfiles.csv',delim=','):
         """Read all mean profiles (calculated separately) from a file.
         Expected columns are:
@@ -63,13 +67,14 @@ class basic:
 
         self.meanProfilesRead = True
 
+
     def readMeanProfile(self,
             Ufile='U.dat',
             Vfile='V.dat',
             Tfile='T.dat',
-            delim=None):# {{{
+            delim=None):
         """Read planar averages (postprocessed separately) from
-        individual files. These are saved into arrays for interpolating,
+        individual files.  These are saved into arrays for interpolation
         assuming that the heights in all files are the same.
 
         Calls applyInterpolatedMeanProfile() to set up interpolation
@@ -91,15 +96,15 @@ class basic:
         self.applyInterpolatedMeanProfile()
 
         self.meanProfilesRead = True
-    # }}}
+
 
     def readVarianceProfile(self,
             uufile='uu.dat',
             vvfile='vv.dat',
             wwfile='ww.dat',
-            delim=None):# {{{
+            delim=None):
         """Read planar averages (postprocessed separately) from
-        individual files. These are saved into arrays for interpolating,
+        individual files.  These are saved into arrays for interpolation
         assuming that the heights in all files are the same.
         """
         uudata = np.loadtxt(uufile,delimiter=delim)
@@ -126,11 +131,13 @@ class basic:
         #    kind='linear',fill_value='extrapolate')
 
         self.variancesRead = True
-    # }}}
 
-    def calculateRMS(self,output=''):# {{{
-        """ Calculate root-mean square or standard deviation of the fluctuating velocities.
-        Output is the square root of the ensemble average of the fluctuations, i.e. the root-mean-square or standard deviation, which should match the output in in PREFIX.sum.
+
+    def calculateRMS(self,output=''):
+        """Calculate root-mean square or standard deviation of the
+        fluctuating velocities.  Output is the square root of the
+        average of the fluctuations, i.e. the root-mean-square or
+        standard deviation, which should match the output in PREFIX.sum.
         """
         self.uu = self.V[0,:,:,:]**2
         self.vv = self.V[1,:,:,:]**2
@@ -156,12 +163,13 @@ class basic:
                 for i,zi in enumerate(self.z):
                         f.write('z= {:.1f} : {}\n'.format(zi,np.sqrt(self.ww_tavg[:,i])))
             print 'Wrote out',output
-# }}}
+
 
     #@profile
-    def tileY(self,ntiles,mirror=False):# {{{
+    def tileY(self,ntiles,mirror=False):
         """Duplicate field in lateral direction
         'ntiles' is the final number of panels including the original
+
         Set 'mirror' to True to flip every other tile
         """
         ntiles = int(ntiles)
@@ -192,12 +200,13 @@ class basic:
         self.NY = NYnew
         assert( self.V.shape == (3,self.NY,self.NZ,self.N) )
         self.y = np.arange(self.NY,dtype=self.realtype)*self.dy
-    # }}}
 
-    def extendZ(self,zMin,zMax):# {{{
-        """ Extend TurbSim domain to fit LES domain and update NZ
-        Values between zMin and min(z) will be duplicated from V[:3,y,z=min(z),t]
-        Values between max(z) and zMax will be zero
+
+    def extendZ(self,zMin,zMax):
+        """Extend TurbSim domain to fit LES domain and update NZ
+        Values between zMin and min(z) will be duplicated from
+        V[:3,y,z=min(z),t], whereas values between max(z) and zMax will
+        be set to zero.
         """
         if zMin > self.z[0]:
             print 'zMin not changed from',self.z[0],'to',zMin
@@ -229,7 +238,6 @@ class basic:
         self.z = self.zbot + np.arange(self.NZ,dtype=self.realtype)*self.dz
         self.scaling = np.ones((3,self.NZ))
 
-    # }}}
 
     def applyInterpolatedMeanProfile(self,
             ):
@@ -256,9 +264,9 @@ class basic:
     def applyMeanProfiles(self,
             Uprofile=lambda z:[0.0,0.0,0.0],
             Tprofile=lambda z:0.0
-        ) :# {{{
-        """ Sets the mean velocity and temperature profiles (which
-        affects output from writeMappedBC and writeVTK). Called by
+        ):
+        """Sets the mean velocity and temperature profiles (which
+        affects output from writeMappedBC and writeVTK).  Called by
         readMeanProfile after reading in post-processed planar averages.
 
         Can also be directly called with a user-specified analytical
@@ -276,11 +284,11 @@ class basic:
                 print self.z[iz],U,self.Tinlet[iz]
 
         self.meanProfilesSet = True
-    # }}}
 
-    def setTkeProfile(self,kprofile=lambda z:0.0):# {{{
-        """ Sets the mean TKE profiles (affects output from writeMappedBC)
-        Called by readHubTkeProfile.
+
+    def setTkeProfile(self,kprofile=lambda z:0.0):
+        """Sets the mean TKE profiles (affects output from writeMappedBC)
+
         Can also be directly called with a user-specified analytical profile.
         """
         self.kinlet = np.zeros(self.NZ)
@@ -292,20 +300,29 @@ class basic:
         #    print self.z[iz],k
 
         self.tkeProfileSet = True
-    # }}}
 
-    def setScaling(self,tanh_z90=0.0,tanh_z50=0.0,max_scaling=1.0,output=''):# {{{
-        """ Set scaling of fluctuations with height
-        Scaling function ranges from 0 to max_scaling. The heights at which the fluctuation magnitudes are decreased by 90% and 50% (tanh_z90 and tanh_z50, respectively) are specified to scale the hyperbolic tangent function; tanh_z90 should be set to approximately the inversion height:
-          f = max_scaling * 0.5( tanh( k(z-z_50) ) + 1 )
+
+    def setScaling(self,
+            tanh_z90=0.0,
+            tanh_z50=0.0,
+            max_scaling=1.0,
+            output=''):
+        """Set scaling of fluctuations with height.  The scaling
+        function ranges from 0 to max_scaling.  The heights at which the
+        fluctuation magnitudes are decreased by 90% and 50% (tanh_z90
+        and tanh_z50, respectively) are specified to scale the
+        hyperbolic tangent function; tanh_z90 should be set to
+        approximately the inversion height:
+            f = max_scaling * 0.5( tanh( k(z-z_50) ) + 1 )
         where
-          k = arctanh(0.8) / (z_90-z_50)
-        Note: If extendZ is used, that should be called to update the z coordinates prior to using this routine.
+            k = arctanh(0.8) / (z_90-z_50)
+        Note: If extendZ is used, that should be called to update the z
+        coordinates prior to using this routine.
 
         max_scaling may be:
         1) a constant, equal for the x, y, and z directions; 
         2) a list or nd.array of scalars; or
-        3) a list of lambda functions for non-tanh scaling
+        3) a list of lambda functions for non-tanh scaling.
         """
         evalfn = False
         if isinstance(max_scaling,list) or isinstance(max_scaling,np.ndarray):
@@ -340,17 +357,22 @@ class basic:
                 for iz,z in enumerate(self.z):
                     f.write(' {:f} {f[0]:g} {f[1]:g} {f[2]:g}\n'.format(z,f=self.scaling[:,iz]))
             print 'Wrote scaling function to',output
-    # }}}
 
-    def writeMappedBC(self,outputdir='boundaryData',# {{{
+
+    def writeMappedBC(self,outputdir='boundaryData',
             interval=1, Tstart=0., Tmax=None,
             xinlet=0.0, bcname='inlet',
             LESyfac=None, LESzfac=None,
             writeU=True, writeT=True, writek=True):
-        """ For use with OpenFOAM's timeVaryingMappedFixedValue boundary condition.
-        This will create a points file and time directories in 'outputdir', which should be placed in constant/boundaryData/<patchname>.
-        The output interval is in multiples of the TurbSim time step, with output up to time Tmax.
-        Inlet location and bcname should correspond to the LES inflow plane. 
+        """For use with OpenFOAM's timeVaryingMappedFixedValue boundary
+        condition.  This will create a points file and time directories
+        in 'outputdir', which should be placed in
+            constant/boundaryData/<patchname>.
+
+        The output interval is in multiples of the TurbSim time step,
+        with output up to time Tmax.  Inlet location and bcname should
+        correspond to the LES inflow plane.
+        
         LESyfac and LESzfac specify refinement in the microscale domain.
         """
         import os
@@ -506,15 +528,14 @@ FoamFile
 
         # end of time-step loop
 
-    # }}}
 
     def writeVTK(self, fname,
             itime=None,
             output_time=None,
             scaled=True,
-            stdout='overwrite'):# {{{
-        """ Write out binary VTK file with a single vector field.
-        Can specify time index or output time.
+            stdout='overwrite'):
+        """Write out binary VTK file with a single vector field for a
+        specified time index or output time.
         """
         if not self.meanProfilesSet: self.applyMeanProfiles()
 
@@ -560,16 +581,15 @@ FoamFile
             dataname=['U','u\''], #['fluctuations'], #dataname=['TurbSim_velocity'],
             origin=[0.,self.y[0],self.z[0]],
             indexorder='ijk')
-        # }}}
+
 
     def writeVTKSeries(self,
             outputdir='.',
             prefix='inflow',
             step=1,
             scaling=True,
-            stdout='overwrite'): # {{{
-        """ Driver for writeVTK to output a range of times
-        """
+            stdout='overwrite'):
+        """Driver for writeVTK to output a range of times"""
         if not os.path.isdir(outputdir):
             print 'Creating output dir :',outputdir
             os.makedirs(outputdir)
@@ -578,13 +598,13 @@ FoamFile
             fname = outputdir + os.sep + prefix + '_' + str(i) + '.vtk'
             self.writeVTK(fname,itime=i,scaling=scaling,stdout=stdout)
 	if stdout=='overwrite': sys.stdout.write('\n')
-    # }}}
+
 
     def writeVTKSeriesAsBlock(self,
             fname='frozen_block.vtk',
             Umean=1.0,
             step=1,
-            scaling=True):# {{{
+            scaling=True):
         """Write out a 3D block wherein the x planes are comprised of
         temporal snapshots spaced (Umean * step * dt) apart.
         """
@@ -617,4 +637,4 @@ FoamFile
             origin=[0.,self.y[0],self.z[0]],
             indexorder='jki')
         print 'Wrote',fname
-    # }}}
+

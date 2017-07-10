@@ -52,9 +52,6 @@ inflowPlane.tileY(Npanels=3, mirror=True)
 inflowPlane.readMeanProfile('U.dat','V.dat','T.dat')
 inflowPlane.readVarianceProfile('uu.dat','vv.dat','ww.dat')
 
-# Set up the TKE profile
-inflowPlane.setTkeProfile(kprofile=lambda z: 0.1) # constant field
-
 # Since the modeled velocity fluctuations have no height dependence,
 # scale the velocities so that fluctuations decay above some height, zi
 # (where zi == inversion height >= the ABL height)
@@ -71,6 +68,9 @@ inflowPlane.setScaling(
     tanh_z50=600.0,
     max_scaling=(0.75*maxVarianceProfile/meanVariances)**0.5
 )
+
+# Specify a TKE profile (needed for the mapped boundary)
+inflowPlane.setTkeProfile(kprofile=lambda z: 0.1) # constant field
 
 # Write out boundary data for the OpenFOAM 'timeVaryingMappedFixedValue'
 # boundary typically used in SOWFA wind plant simulations
