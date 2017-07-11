@@ -105,17 +105,19 @@ class bts(base.specified_profile):
             #
             # note: need to specify Fortran-order to properly read data using np.nditer
             t0 = time.clock()
-
             if self.verbose: print 'Reading normalized grid data'
+
             self.V = np.zeros((3,self.NY,self.NZ,self.N),order='F',dtype=self.realtype)
-            print '  V size :',self.V.nbytes/1024.**2,'MB'
+            if self.verbose:
+                print '  V size :',self.V.nbytes/1024.**2,'MB'
             for val in np.nditer(self.V, op_flags=['writeonly']):
                 val[...] = f.read_int2()
 
             if self.Ntower > 0:
+                if self.verbose:
+                    print 'Reading normalized tower data'
+                    print '  Vtow size :',self.Vtow.nbytes/1024.**2,'MB'
                 self.Vtow = np.zeros((3,self.Ntower,self.N),order='F',dtype=self.realtype)
-                print '  Vtow size :',self.Vtow.nbytes/1024.**2,'MB'
-                if self.verbose: print 'Reading normalized tower data'
                 for val in np.nditer(self.Vtow, op_flags=['writeonly']):
                     val[...] = f.read_int2()
 
@@ -131,7 +133,7 @@ class bts(base.specified_profile):
                 if self.Ntower > 0:
                     self.Vtow[i,:,:] -= self.Vintercept[i]
                     self.Vtow[i,:,:] /= self.Vslope[i]
-            self.V[0,:,:,:] -= self.Umean
+            self.V[0,:,:,:] -= self.Umean # uniform inflow w/ no shear assumed
 
             #print '  V size :',self.V.nbytes/1042.**2,'MB'
             print '  u min/max [',np.min(self.V[0,:,:,:]),np.max(self.V[0,:,:,:]),']'

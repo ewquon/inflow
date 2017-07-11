@@ -13,16 +13,17 @@ class specified_profile(object):
 
     realtype = np.float32
 
+
     def __init__(self, verbose=False):
         """Stub for basic inflow with specified mean profiles"""
         self.verbose = verbose
         self.Umean = None
 
-
         self.meanProfilesSet = False
         self.meanProfilesRead = False
         self.variancesRead = False
         self.tkeProfileSet = False
+
 
     def setMeanProfiles(self,z,U,V,T,uu=None,vv=None,ww=None):
         """Sets the mean velocity and temperature profiles (and,
@@ -279,7 +280,7 @@ class specified_profile(object):
             self.Tinlet[iz]   = Tprofile(z)
 
         if self.verbose:
-            print 'Set mean profile:  z  U  T'
+            print 'Specified mean profile:  z  U  T'
             for iz,U in enumerate(self.Uinlet):
                 print self.z[iz],U,self.Tinlet[iz]
 
@@ -557,7 +558,7 @@ FoamFile
         up[0,:,:] = self.V[0,:,:,itime]
         vp[0,:,:] = self.V[1,:,:,itime]
         wp[0,:,:] = self.V[2,:,:,itime]
-        if scaling:
+        if scaled:
             for iz in range(self.NZ):
                 up[0,:,iz] *= self.scaling[0,iz]
                 vp[0,:,iz] *= self.scaling[1,iz]
@@ -587,7 +588,7 @@ FoamFile
             outputdir='.',
             prefix='inflow',
             step=1,
-            scaling=True,
+            scaled=True,
             stdout='overwrite'):
         """Driver for writeVTK to output a range of times"""
         if not os.path.isdir(outputdir):
@@ -596,15 +597,14 @@ FoamFile
 
         for i in range(0,self.N,step):
             fname = outputdir + os.sep + prefix + '_' + str(i) + '.vtk'
-            self.writeVTK(fname,itime=i,scaling=scaling,stdout=stdout)
+            self.writeVTK(fname,itime=i,scaled=scaled,stdout=stdout)
 	if stdout=='overwrite': sys.stdout.write('\n')
 
 
     def writeVTKSeriesAsBlock(self,
             fname='frozen_block.vtk',
-            Umean=1.0,
             step=1,
-            scaling=True):
+            scaled=True):
         """Write out a 3D block wherein the x planes are comprised of
         temporal snapshots spaced (Umean * step * dt) apart.
         """
@@ -612,6 +612,11 @@ FoamFile
         if not os.path.isdir(outputdir):
             print 'Creating output dir :',outputdir
             os.makedirs(outputdir)
+
+        if self.Umean is not None:
+            Umean = self.Umean
+        else:
+            Umean = 1.0
 
         # scale fluctuations
         Nt = self.N / step
@@ -621,7 +626,7 @@ FoamFile
         up[:,:,:] = self.V[0,:,:,:Nt*step:step]
         vp[:,:,:] = self.V[1,:,:,:Nt*step:step]
         wp[:,:,:] = self.V[2,:,:,:Nt*step:step]
-        if scaling:
+        if scaled:
             for iz in range(self.NZ):
                 up[:,iz,:] *= self.scaling[0,iz]
                 vp[:,iz,:] *= self.scaling[1,iz]
