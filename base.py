@@ -203,15 +203,57 @@ class specified_profile(object):
         self.y = np.arange(self.NY,dtype=self.realtype)*self.dy
 
 
-    def setZ(self,zMin,zMax,shrink=False,dryrun=False):
+    def resizeY(self,yMin=None,yMax=None,dryrun=False):
+        """Set TurbSim domain to fit LES domain. Min(y) will be shifted
+        to coincide with yMin.
+        """
+        if yMin is None:
+            yMin = self.y[0]
+        if yMax is None:
+            yMax = self.y[-1]
+        Ly_specified = yMax - yMin
+        Ly = self.y[-1] - self.y[0]
+        if Ly_specified > Ly:
+            print 'Specified y range', (yMin,yMax), \
+                    'greater than', (self.y[0],self.y[-1])
+            return
+
+        if dryrun: sys.stdout.write('(DRY RUN) ')
+        print 'Resizing fluctuations field in y-dir from [', self.y[0],self.y[-1],'] to [',yMin,yMax,']'
+        print '  before:',self.V.shape
+        
+        newNY = int(np.ceil(Ly_specified/Ly * self.NY))
+        Vnew = self.V[:,:newNY,:,:]
+        print '  after:',Vnew.shape
+        if not dryrun:
+            self.V = Vnew
+            self.NY = newNY
+
+        ynew = yMin + np.arange(newNY,dtype=self.realtype)*self.dy
+        if not dryrun:
+            print 'Updating y coordinates'
+            self.y = ynew
+        else:
+            print '(DRY RUN) y coordinates:',ynew
+
+        # flag update for mean profile
+        self.meanProfilesSet = False
+
+
+    def resizeZ(self,zMin=None,zMax=None,shrink=False,dryrun=False):
         """Set/extend TurbSim domain to fit LES domain and update NZ
         values between zMin and min(z) will be duplicated from
         V[:3,y,z=min(z),t], whereas values between max(z) and zMax will
         be set to zero.
 
         By default, this function will not resize inflow plane to a
-        smaller domain; to override this, set shrink to True.
+        smaller domain; to override this, set shrink to True. (NOT YET
+        TESTED)
         """
+        if zMin is None:
+            zMin = self.z[0]
+        if zMax is None:
+            zMax = self.z[-1]
         if not shrink:
             if zMin > self.z[0]:
                 print 'zMin not changed from',self.z[0],'to',zMin
@@ -223,7 +265,7 @@ class specified_profile(object):
         self.zbot = zMin
 
         imin = int(zMin/self.dz)
-        imax = np.ceil(zMax/self.dz)
+        imax = int(np.ceil(zMax/self.dz))
         zMin = imin*self.dz
         zMax = imax*self.dz
         ioff = int((self.z[0]-zMin)/self.dz)
@@ -235,7 +277,11 @@ class specified_profile(object):
         Vnew = np.zeros( (3,self.NY,newNZ,self.N) )
         for iz in range(ioff):
             Vnew[:,:,iz,:] = self.V[:,:,0,:]
-        Vnew[:,:,ioff:ioff+self.NZ,:] = self.V
+        if not shrink:
+            Vnew[:,:,ioff:ioff+self.NZ,:] = self.V
+        else:
+            iupper = np.min(ioff+self.NZ, newNZ)
+            Vnew[:,:,ioff:iupper,:] = self.V[:,:,:iupper-ioff,:]
         print '  after:',Vnew.shape
         if not dryrun:
             self.V = Vnew
@@ -251,6 +297,9 @@ class specified_profile(object):
         if not dryrun:
             print 'Resetting scaling function'
             self.scaling = np.ones((3,newNZ))
+
+        # flag update for mean profile
+        self.meanProfilesSet = False
 
 
     def applyInterpolatedMeanProfile(self,

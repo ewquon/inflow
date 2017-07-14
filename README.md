@@ -42,8 +42,9 @@ inflowPlane.calculateRMS(output='rms.txt')
 # Resize the domain (OPTIONAL)
 # Note: This should be done prior to calling readMeanProfile so
 #       that the mean profile is set on the new resized domain.
-inflowPlane.extendZ(zMin=0.0, zMax=1000.0)
 inflowPlane.tileY(Npanels=3, mirror=True)
+inflowPlane.resizeY(yMin=0.0, yMax=3000.0) 
+inflowPlane.resizeZ(zMin=0.0, zMax=1000.0)
 
 # Set up mean profiles
 # Note: This sets the *_profile properties of inflowPlane 
