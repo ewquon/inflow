@@ -203,26 +203,32 @@ class specified_profile(object):
         self.y = np.arange(self.NY,dtype=self.realtype)*self.dy
 
 
-    def extendZ(self,zMin,zMax):
-        """Extend TurbSim domain to fit LES domain and update NZ
-        Values between zMin and min(z) will be duplicated from
+    def setZ(self,zMin,zMax,shrink=False,dryrun=False):
+        """Set/extend TurbSim domain to fit LES domain and update NZ
+        values between zMin and min(z) will be duplicated from
         V[:3,y,z=min(z),t], whereas values between max(z) and zMax will
         be set to zero.
+
+        By default, this function will not resize inflow plane to a
+        smaller domain; to override this, set shrink to True.
         """
-        if zMin > self.z[0]:
-            print 'zMin not changed from',self.z[0],'to',zMin
-            return
-        if zMax < self.z[-1]:
-            print 'zMax not changed from',self.z[-1],'to',zMax
-            return
+        if not shrink:
+            if zMin > self.z[0]:
+                print 'zMin not changed from',self.z[0],'to',zMin
+                return
+            if zMax < self.z[-1]:
+                print 'zMax not changed from',self.z[-1],'to',zMax
+                return
+
         self.zbot = zMin
 
         imin = int(zMin/self.dz)
-        imax = int(zMax/self.dz)
+        imax = np.ceil(zMax/self.dz)
         zMin = imin*self.dz
         zMax = imax*self.dz
         ioff = int((self.z[0]-zMin)/self.dz)
-        print 'Extending fluctuations field in z-dir from [', self.z[0],self.z[-1],'] to [',zMin,zMax,']'
+        if dryrun: sys.stdout.write('(DRY RUN) ')
+        print 'Resizing fluctuations field in z-dir from [', self.z[0],self.z[-1],'] to [',zMin,zMax,']'
         print '  before:',self.V.shape
         
         newNZ = imax-imin+1
@@ -230,14 +236,21 @@ class specified_profile(object):
         for iz in range(ioff):
             Vnew[:,:,iz,:] = self.V[:,:,0,:]
         Vnew[:,:,ioff:ioff+self.NZ,:] = self.V
+        print '  after:',Vnew.shape
+        if not dryrun:
+            self.V = Vnew
+            self.NZ = newNZ
 
-        self.V = Vnew
-        self.NZ = newNZ
-        print '  after:',self.V.shape
+        znew = self.zbot + np.arange(newNZ,dtype=self.realtype)*self.dz
+        if not dryrun:
+            print 'Updating z coordinates'
+            self.z = znew
+        else:
+            print '(DRY RUN) z coordinates:',znew
 
-        print 'Updating z coordinates and resetting scaling function'
-        self.z = self.zbot + np.arange(self.NZ,dtype=self.realtype)*self.dz
-        self.scaling = np.ones((3,self.NZ))
+        if not dryrun:
+            print 'Resetting scaling function'
+            self.scaling = np.ones((3,newNZ))
 
 
     def applyInterpolatedMeanProfile(self,
