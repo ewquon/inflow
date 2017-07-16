@@ -15,7 +15,20 @@ class specified_profile(object):
 
 
     def __init__(self, verbose=False):
-        """Stub for basic inflow with specified mean profiles"""
+        """Stub for basic inflow with specified mean profiles
+
+        After initialization, the following variables should be set:
+        * Dimensions: NY, NZ (horizontal, vertical)
+        * Number of time snapshots: N
+        * Spacings/step size: dt, dy, dz
+        * Rectilinear grid: y, z
+        * Sampling times: t
+        * Velocity field: V (with shape==(3,NY,NZ,Ntimes))
+        * Scaling function: scaling (shape==(3,NZ))
+
+        Optionally, the following parameters may be set:
+        * Reference velocity: Umean
+        """
         self.verbose = verbose
         self.Umean = None
 
@@ -37,9 +50,25 @@ class specified_profile(object):
         self.U_profile = np.array(U)
         self.V_profile = np.array(V)
         self.T_profile = np.array(T)
-        self.uu_profile = np.array(uu)
-        self.vv_profile = np.array(vv)
-        self.ww_profile = np.array(ww)
+        if uu is None:
+            self.uu_profile = np.zeros(len(z))
+        else:
+            self.uu_profile = np.array(uu)
+        if vv is None:
+            self.vv_profile = np.zeros(len(z))
+        else:
+            self.vv_profile = np.array(vv)
+        if ww is None:
+            self.ww_profile = np.zeros(len(z))
+        else:
+            self.ww_profile = np.array(ww)
+        meanNZ = len(z)
+        assert(len(U_profile) == meanNZ)
+        assert(len(V_profile) == meanNZ)
+        assert(len(T_profile) == meanNZ)
+        assert(len(uu_profile) == meanNZ)
+        assert(len(vv_profile) == meanNZ)
+        assert(len(ww_profile) == meanNZ)
 
         self.applyInterpolatedMeanProfile()
 
@@ -204,8 +233,8 @@ class specified_profile(object):
 
 
     def resizeY(self,yMin=None,yMax=None,dryrun=False):
-        """Set TurbSim domain to fit LES domain. Min(y) will be shifted
-        to coincide with yMin.
+        """Resize inflow domain to fit LES boundary and update NY.
+        Min(y) will be shifted to coincide with yMin.
         """
         if yMin is None:
             yMin = self.y[0]
@@ -241,8 +270,8 @@ class specified_profile(object):
 
 
     def resizeZ(self,zMin=None,zMax=None,shrink=False,dryrun=False):
-        """Set/extend TurbSim domain to fit LES domain and update NZ
-        values between zMin and min(z) will be duplicated from
+        """Set/extend inflow domain to fit LES boundary and update NZ.
+        Values between zMin and min(z) will be duplicated from
         V[:3,y,z=min(z),t], whereas values between max(z) and zMax will
         be set to zero.
 
@@ -432,13 +461,12 @@ class specified_profile(object):
         in 'outputdir', which should be placed in
             constant/boundaryData/<patchname>.
 
-        The output interval is in multiples of the TurbSim time step,
+        The output interval is in multiples of the inflow time step,
         with output up to time Tmax.  Inlet location and bcname should
         correspond to the LES inflow plane.
         
         LESyfac and LESzfac specify refinement in the microscale domain.
         """
-        import os
         if not os.path.isdir(outputdir):
             print 'Creating output dir :',outputdir
             os.makedirs(outputdir)
@@ -641,7 +669,7 @@ FoamFile
             [ U,V,W, up,vp,wp ],
             datatype=['vector','vector'],
             dx=1.0, dy=self.dy, dz=self.dz,
-            dataname=['U','u\''], #['fluctuations'], #dataname=['TurbSim_velocity'],
+            dataname=['U','u\''], #['fluctuations'], #dataname=['inflow_velocity'],
             origin=[0.,self.y[0],self.z[0]],
             indexorder='ijk')
 
@@ -665,12 +693,12 @@ FoamFile
 
     def writeVTKSeriesAsBlock(self,
             fname='frozen_block.vtk',
+            outputdir='.',
             step=1,
             scaled=True):
         """Write out a 3D block wherein the x planes are comprised of
         temporal snapshots spaced (Umean * step * dt) apart.
         """
-        import os
         if not os.path.isdir(outputdir):
             print 'Creating output dir :',outputdir
             os.makedirs(outputdir)

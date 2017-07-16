@@ -57,14 +57,14 @@ class bts(base.specified_profile):
             self.dz = f.read_float(dtype=self.realtype)
             self.dy = f.read_float(dtype=self.realtype)
             self.dt = f.read_float(dtype=self.realtype)
-            self.T  = self.realtype(self.N * self.dt)
+            self.period  = self.realtype(self.N * self.dt)
             self.Nsize = 3*self.NY*self.NZ*self.N
             if self.verbose:
                 print '  nt=',self.N
                 print '  (problem size: {:d} points)'.format(self.Nsize)
                 print '  dz,dy=',self.dz,self.dy
                 print '  TimeStep=',self.dt
-                print '  Period=',self.T
+                print '  Period=',self.period
 
             # - read reference values
             self.uhub = f.read_float(dtype=self.realtype)
