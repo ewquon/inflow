@@ -693,15 +693,22 @@ FoamFile
 
     def writeVTKSeriesAsBlock(self,
             fname='frozen_block.vtk',
-            outputdir='.',
+            outputdir=None,
             step=1,
             scaled=True):
         """Write out a 3D block wherein the x planes are comprised of
         temporal snapshots spaced (Umean * step * dt) apart.
+
+        This invokes Taylor's frozen turbulence assumption.
         """
-        if not os.path.isdir(outputdir):
+        if outputdir is None:
+            outputdir = '.'
+        elif not os.path.isdir(outputdir):
             print 'Creating output dir :',outputdir
             os.makedirs(outputdir)
+
+        fname = os.path.join(outputdir,fname)
+        print 'Writing VTK block',fname
 
         if self.Umean is not None:
             Umean = self.Umean
@@ -731,5 +738,4 @@ FoamFile
             dataname=['u\''],
             origin=[0.,self.y[0],self.z[0]],
             indexorder='jki')
-        print 'Wrote',fname
 
