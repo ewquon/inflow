@@ -15,7 +15,7 @@ class specified_profile(object):
 
 
     def __init__(self, verbose=False):
-        """Stub for basic inflow with specified mean profiles
+        """Defaults are set here
 
         After initialization, the following variables should be set:
         * Dimensions: NY, NZ (horizontal, vertical)
@@ -32,13 +32,21 @@ class specified_profile(object):
         self.verbose = verbose
         self.Umean = None
 
+        self.haveField = False
         self.meanProfilesSet = False
         self.meanProfilesRead = False
         self.variancesRead = False
         self.tkeProfileSet = False
 
+    
+    def readField(self):
+        """Stub to read inflow field"""
+        print 'This function should be overridden for each inflow class...'
+        print 'No inflow data were read.'
 
-    def setMeanProfiles(self,z,U,V,T,uu=None,vv=None,ww=None):
+
+    def setMeanProfiles(self,z,U,V,T,
+            uu=None,vv=None,ww=None):
         """Sets the mean velocity and temperature profiles (and,
         optionally, the variance profiles as well) from user-specified
         np.ndarrays.
@@ -70,9 +78,14 @@ class specified_profile(object):
         assert(len(vv_profile) == meanNZ)
         assert(len(ww_profile) == meanNZ)
 
-        self.applyInterpolatedMeanProfile()
-
         self.meanProfilesRead = True
+
+        if self.haveField:
+            self.applyInterpolatedMeanProfile()
+        else:
+            print 'Note: Interpolated mean profile has not been set up since'
+            print '      inflow data have not been read.'
+
 
 
     def readAllProfiles(self,fname='averagingProfiles.csv',delim=','):
@@ -85,17 +98,21 @@ class specified_profile(object):
         functions.
         """
         data = np.loadtxt(fname,delimiter=delim)
-        self.z_profile = np.array(Udata[:,0])
-        self.U_profile = np.array(Udata[:,1])
-        self.V_profile = np.array(Udata[:,2])
-        self.T_profile = np.array(Udata[:,4])
-        self.uu_profile = np.array(Udata[:,5])
-        self.vv_profile = np.array(Udata[:,6])
-        self.ww_profile = np.array(Udata[:,7])
-
-        self.applyInterpolatedMeanProfile()
+        self.z_profile = np.array(data[:,0])
+        self.U_profile = np.array(data[:,1])
+        self.V_profile = np.array(data[:,2])
+        self.T_profile = np.array(data[:,4])
+        self.uu_profile = np.array(data[:,5])
+        self.vv_profile = np.array(data[:,6])
+        self.ww_profile = np.array(data[:,7])
 
         self.meanProfilesRead = True
+
+        if self.haveField:
+            self.applyInterpolatedMeanProfile()
+        else:
+            print 'Note: Interpolated mean profile has not been set up since'
+            print '      inflow data have not been read.'
 
 
     def readMeanProfile(self,
@@ -123,9 +140,13 @@ class specified_profile(object):
         self.V_profile = np.array(Vmean)
         self.T_profile = np.array(Tmean)
 
-        self.applyInterpolatedMeanProfile()
-
         self.meanProfilesRead = True
+
+        if self.haveField:
+            self.applyInterpolatedMeanProfile()
+        else:
+            print 'Note: Interpolated mean profile has not been set up since'
+            print '      inflow data have not been read.'
 
 
     def readVarianceProfile(self,
@@ -331,8 +352,7 @@ class specified_profile(object):
         self.meanProfilesSet = False
 
 
-    def applyInterpolatedMeanProfile(self,
-            ):
+    def applyInterpolatedMeanProfile(self):
         """Helper routine to calculate interpolation functions after
         mean profiles have been input.
 
@@ -364,6 +384,9 @@ class specified_profile(object):
         Can also be directly called with a user-specified analytical
         profile.
         """
+        if self.meanProfilesSet:
+            print 'Note: Mean profiles have already been set and will be overwritten'
+
         self.Uinlet = np.zeros((self.NZ,3))
         self.Tinlet = np.zeros(self.NZ)
         for iz,z in enumerate(self.z):

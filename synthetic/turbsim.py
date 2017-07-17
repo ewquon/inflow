@@ -13,7 +13,7 @@ from binario import binaryfile
 
 class bts(base.specified_profile):
 
-    def __init__(self, fname, Umean=None, verbose=False):
+    def __init__(self, fname=None, Umean=None, verbose=False):
         """Processes binary full-field time series output from TurbSim.
 
         Tested with TurbSim v2.00.05c-bjj, 25-Feb-2016
@@ -22,9 +22,16 @@ class bts(base.specified_profile):
         super(self.__class__,self).__init__(verbose)
         self.Umean = Umean
 
+        if fname is not None:
+            self.readField(fname)
+
+
+    def readField(self,fname):
         if not fname.endswith('.bts'):
             fname = fname + '.bts'
         self._readBTS(fname)
+        self.haveField = True
+
 
     #@profile
     def _readBTS(self,fname):
