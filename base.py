@@ -401,14 +401,14 @@ class specified_profile(object):
         self.meanProfilesSet = True
 
 
-    def setTkeProfile(self,kprofile=lambda z:0.0):
+    def setTkeProfile(self,k_profile=lambda z:0.0):
         """Sets the mean TKE profiles (affects output from writeMappedBC)
 
         Can also be directly called with a user-specified analytical profile.
         """
         self.kinlet = np.zeros(self.NZ)
         for iz,z in enumerate(self.z):
-            self.kinlet[iz]   = kprofile(z)
+            self.kinlet[iz] = k_profile(z)
 
         #print 'Set TKE profile:  z  k'
         #for iz,k in enumerate(self.kinlet):
@@ -440,7 +440,7 @@ class specified_profile(object):
         3) a list of lambda functions for non-tanh scaling.
         """
         evalfn = False
-        if isinstance(max_scaling,list) or isinstance(max_scaling,np.ndarray):
+        if isinstance(max_scaling,(list,tuple,np.ndarray)):
             assert( len(max_scaling) == 3 )
             if any( [ hasattr(f, '__call__') for f in max_scaling ] ): evalfn = True
         else:
