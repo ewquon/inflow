@@ -482,7 +482,7 @@ class specified_profile(object):
             bcname='inlet',
             LESyfac=None, LESzfac=None,
             writeU=True, writeT=True, writek=True,
-            stdout='overwrite'):
+            stdout='verbose'):
         """For use with OpenFOAM's timeVaryingMappedFixedValue boundary
         condition.  This will create a points file and time directories
         in 'outputdir', which should be placed in
@@ -596,7 +596,7 @@ FoamFile
 
             prefix = outputdir + os.sep + tname + os.sep
             if stdout=='overwrite':
-                sys.stdout.write('Writing {}* (itime={})\n'.format(prefix,itime))
+                sys.stdout.write('\rWriting {}* (itime={})'.format(prefix,itime))
 
             #
             # write out U
@@ -652,10 +652,9 @@ FoamFile
                             f.write('{s:f}\n'.format(s=self.kinlet[kidx[k]]))
                     f.write(')\n')
 
-            if stdout=='overwrite':
-                sys.stdout.write('\n')
-
         # end of time-step loop
+        if stdout=='overwrite':
+            sys.stdout.write('\n')
 
 
     def writeVTK(self, fname,
