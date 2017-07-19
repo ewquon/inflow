@@ -45,7 +45,8 @@ class specified_profile(object):
         print 'No inflow data were read.'
 
 
-    def setMeanProfiles(self,z,U,V,T,
+    def setMeanProfiles(self, z,
+            U, V, T,
             uu=None,vv=None,ww=None):
         """Sets the mean velocity and temperature profiles (and,
         optionally, the variance profiles as well) from user-specified
@@ -184,7 +185,7 @@ class specified_profile(object):
         self.variancesRead = True
 
 
-    def calculateRMS(self,output=''):
+    def calculateRMS(self,output=None):
         """Calculate root-mean square or standard deviation of the
         fluctuating velocities.  Output is the square root of the
         average of the fluctuations, i.e. the root-mean-square or
@@ -202,7 +203,7 @@ class specified_profile(object):
 
         print 'Spatial average of <u\'u\'>, <v\'v\'>, <w\'w\'> :',self.uu_mean,self.vv_mean,self.ww_mean
 
-        if not output=='':
+        if output is not None:
             with open(output,'w') as f:
                 f.write('   Height   Standard deviation at grid points for the u component:\n')
                 for i,zi in enumerate(self.z):
@@ -216,7 +217,6 @@ class specified_profile(object):
             print 'Wrote out',output
 
 
-    #@profile
     def tileY(self,ntiles,mirror=False):
         """Duplicate field in lateral direction
         'ntiles' is the final number of panels including the original
@@ -474,18 +474,22 @@ class specified_profile(object):
             print 'Wrote scaling function to',output
 
 
-    def writeMappedBC(self,outputdir='boundaryData',
-            interval=1, Tstart=0., Tmax=None,
-            xinlet=0.0, bcname='inlet',
+    def writeMappedBC(self,
+            outputdir='boundaryData',
+            interval=1,
+            Tstart=0., Tend=None,
+            xinlet=0.0,
+            bcname='inlet',
             LESyfac=None, LESzfac=None,
-            writeU=True, writeT=True, writek=True):
+            writeU=True, writeT=True, writek=True,
+            stdout='overwrite'):
         """For use with OpenFOAM's timeVaryingMappedFixedValue boundary
         condition.  This will create a points file and time directories
         in 'outputdir', which should be placed in
             constant/boundaryData/<patchname>.
 
         The output interval is in multiples of the inflow time step,
-        with output up to time Tmax.  Inlet location and bcname should
+        with output up to time Tend.  Inlet location and bcname should
         correspond to the LES inflow plane.
         
         LESyfac and LESzfac specify refinement in the microscale domain.
@@ -496,7 +500,7 @@ class specified_profile(object):
 
         if not self.meanProfilesSet:
             print 'Note: Mean profiles have not been set or read from files'
-            self.applyMeanProfiles()
+            self.applyMeanProfiles() # set up inlet profile functions
         if writek and not self.meanProfilesSet:
             print 'Note: Mean TKE profile has not been set'
             self.setTkeProfile()
@@ -576,10 +580,10 @@ FoamFile
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 // Average
 {avgValue}\n\n"""
-        if Tmax is None: 
-            Tmax = Tstart + self.T
+        if Tend is None: 
+            Tend = Tstart + self.period
         istart = int(self.realtype(Tstart) / self.dt)
-        iend = int(self.realtype(Tmax) / self.dt)
+        iend = int(self.realtype(Tend) / self.dt)
         print 'Outputting time length',(iend-istart)*self.dt
         #
         # time-step loop
@@ -589,14 +593,18 @@ FoamFile
             tname = '{:f}'.format(self.realtype(i*self.dt)).rstrip('0').rstrip('.')
             try: os.mkdir(outputdir+os.sep+tname)
             except: pass
+
             prefix = outputdir + os.sep + tname + os.sep
+            if stdout=='overwrite':
+                sys.stdout.write('Writing {}* (itime={})\n'.format(prefix,itime))
 
             #
             # write out U
             #
             if writeU:
                 fname = prefix + 'U'
-                sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
+                if not stdout=='overwrite':
+                    sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 # scale fluctuations
                 up[0,0,:,:] = self.V[0,:,:,itime]
                 up[1,0,:,:] = self.V[1,:,:,itime]
@@ -609,7 +617,9 @@ FoamFile
                     f.write('{:d}\n(\n'.format(NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
-                            f.write('({v[0]:f} {v[1]:f} {v[2]:f})\n'.format(v=self.Uinlet[kidx[k],:]+up[:,0,jidx[j],kidx[k]]))
+                            f.write('({v[0]:f} {v[1]:f} {v[2]:f})\n'.format(
+                                v=self.Uinlet[kidx[k],:] + up[:,0,jidx[j],kidx[k]]
+                            ))
                     f.write(')\n')
 
             #
@@ -617,7 +627,8 @@ FoamFile
             #
             if writeT:
                 fname = prefix + 'T'
-                sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
+                if not stdout=='overwrite':
+                    sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 with open(fname,'w') as f:
                     f.write(datahdr.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
                     f.write('{:d}\n(\n'.format(NY*NZ))
@@ -631,7 +642,8 @@ FoamFile
             #
             if writek:
                 fname = prefix + 'k'
-                sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
+                if not stdout=='overwrite':
+                    sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 with open(fname,'w') as f:
                     f.write(datahdr.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
                     f.write('{:d}\n(\n'.format(NY*NZ))
@@ -639,6 +651,9 @@ FoamFile
                         for j in range(NY):
                             f.write('{s:f}\n'.format(s=self.kinlet[kidx[k]]))
                     f.write(')\n')
+
+            if stdout=='overwrite':
+                sys.stdout.write('\n')
 
         # end of time-step loop
 
