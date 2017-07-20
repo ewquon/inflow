@@ -23,7 +23,7 @@ class specified_profile(object):
         * Spacings/step size: dt, dy, dz
         * Rectilinear grid: y, z
         * Sampling times: t
-        * Velocity field: V (with shape==(3,NY,NZ,Ntimes))
+        * Velocity field: V (with shape==(3,Ntimes,NY,NZ))
         * Scaling function: scaling (shape==(3,NZ))
 
         Optionally, the following parameters may be set:
@@ -229,27 +229,27 @@ class specified_profile(object):
         if mirror:
             # [0 1 2] --> [0 1 2 1 0 1 2 .. ]
             NYnew = (self.NY-1)*ntiles + 1
-            Vnew = np.zeros((3,NYnew,self.NZ,self.N))
-            Vnew[:,:self.NY,:,:] = self.V[:,:self.NY,:,:]
+            Vnew = np.zeros((3,self.N,NYnew,self.NZ))
+            Vnew[:,:,:self.NY,:] = self.V[:,:,:self.NY,:]
             delta = self.NY - 1
             flipped = True
             for i in range(1,ntiles):
                 if flipped:
-                    Vnew[:,i*delta+1:(i+1)*delta+1,:,:] = self.V[:,delta-1::-1,:,:]
+                    Vnew[:,:,i*delta+1:(i+1)*delta+1,:] = self.V[:,:,delta-1::-1,:]
                 else:
-                    Vnew[:,i*delta+1:(i+1)*delta+1,:,:] = self.V[:,1:,:,:]
+                    Vnew[:,:,i*delta+1:(i+1)*delta+1,:] = self.V[:,:,1:,:]
                 flipped = not flipped
             self.V = Vnew
         else:
             # [0 1 2] --> [0 1 0 1 .. 0 1 2]
-            self.V = np.tile(self.V[:,:-1,:,:],(1,ntiles,1,1))
-            plane0 = np.zeros((3,1,self.NZ,self.N))
-            plane0[:,0,:,:] = self.V[:,-1,:,:]
+            self.V = np.tile(self.V[:,:,:-1,:],(1,1,ntiles,1))
+            plane0 = np.zeros((3,self.N,1,self.NZ))
+            plane0[:,:,0,:] = self.V[:,:,-1,:]
             self.V = np.concatenate((self.V,plane0),axis=1)
         print '  after :',self.V.shape
 
         self.NY = NYnew
-        assert( self.V.shape == (3,self.NY,self.NZ,self.N) )
+        assert( self.V.shape == (3,self.N,self.NY,self.NZ) )
         self.y = np.arange(self.NY,dtype=self.realtype)*self.dy
 
 
@@ -273,7 +273,7 @@ class specified_profile(object):
         print '  before:',self.V.shape
         
         newNY = int(np.ceil(Ly_specified/Ly * self.NY))
-        Vnew = self.V[:,:newNY,:,:]
+        Vnew = self.V[:,:,:newNY,:]
         print '  after:',Vnew.shape
         if not dryrun:
             self.V = Vnew
@@ -324,14 +324,14 @@ class specified_profile(object):
         print '  before:',self.V.shape
         
         newNZ = imax-imin+1
-        Vnew = np.zeros( (3,self.NY,newNZ,self.N) )
+        Vnew = np.zeros( (3,self.N,self.NY,newNZ) )
         for iz in range(ioff):
-            Vnew[:,:,iz,:] = self.V[:,:,0,:]
+            Vnew[:,:,:,iz] = self.V[:,:,:,0]
         if not shrink:
-            Vnew[:,:,ioff:ioff+self.NZ,:] = self.V
+            Vnew[:,:,:,ioff:ioff+self.NZ] = self.V
         else:
             iupper = np.min(ioff+self.NZ, newNZ)
-            Vnew[:,:,ioff:iupper,:] = self.V[:,:,:iupper-ioff,:]
+            Vnew[:,:,:,ioff:iupper] = self.V[:,:,:,:iupper-ioff]
         print '  after:',Vnew.shape
         if not dryrun:
             self.V = Vnew
@@ -467,7 +467,8 @@ class specified_profile(object):
                 if evalfn:
                     f.write('# custom scaling function\n')
                 else:
-                    f.write('# tanh scaling parameters: z_90={:f}, z_50={:f}, max_scaling={}\n'.format(tanh_z90,tanh_z50,max_scaling))
+                    f.write('# tanh scaling parameters: z_90={:f}, z_50={:f}, max_scaling={}\n'.format(
+                        tanh_z90,tanh_z50,max_scaling))
                 f.write('# z  f_u(z)  f_v(z)  f_w(z)\n')
                 for iz,z in enumerate(self.z):
                     f.write(' {:f} {f[0]:g} {f[1]:g} {f[2]:g}\n'.format(z,f=self.scaling[:,iz]))
@@ -606,9 +607,9 @@ FoamFile
                 if not stdout=='overwrite':
                     sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 # scale fluctuations
-                up[0,0,:,:] = self.V[0,:,:,itime]
-                up[1,0,:,:] = self.V[1,:,:,itime]
-                up[2,0,:,:] = self.V[2,:,:,itime]
+                up[0,0,:,:] = self.V[0,itime,:,:]
+                up[1,0,:,:] = self.V[1,itime,:,:]
+                up[2,0,:,:] = self.V[2,itime,:,:]
                 for iz in range(self.NZ): # note: up is the original size
                     for i in range(3):
                         up[i,0,:,iz] *= self.scaling[i,iz]
@@ -682,9 +683,9 @@ FoamFile
         up = np.zeros((1,self.NY,self.NZ))
         wp = np.zeros((1,self.NY,self.NZ))
         vp = np.zeros((1,self.NY,self.NZ))
-        up[0,:,:] = self.V[0,:,:,itime]
-        vp[0,:,:] = self.V[1,:,:,itime]
-        wp[0,:,:] = self.V[2,:,:,itime]
+        up[0,:,:] = self.V[0,itime,:,:]
+        vp[0,:,:] = self.V[1,itime,:,:]
+        wp[0,:,:] = self.V[2,itime,:,:]
         if scaled:
             for iz in range(self.NZ):
                 up[0,:,iz] *= self.scaling[0,iz]
@@ -754,17 +755,17 @@ FoamFile
 
         # scale fluctuations
         Nt = self.N / step
-        up = np.zeros((self.NY,self.NZ,Nt))
-        vp = np.zeros((self.NY,self.NZ,Nt))
-        wp = np.zeros((self.NY,self.NZ,Nt))
-        up[:,:,:] = self.V[0,:,:,:Nt*step:step]
-        vp[:,:,:] = self.V[1,:,:,:Nt*step:step]
-        wp[:,:,:] = self.V[2,:,:,:Nt*step:step]
+        up = np.zeros((Nt,self.NY,self.NZ))
+        vp = np.zeros((Nt,self.NY,self.NZ))
+        wp = np.zeros((Nt,self.NY,self.NZ))
+        up[:,:,:] = self.V[0,:Nt*step:step,:,:]
+        vp[:,:,:] = self.V[1,:Nt*step:step,:,:]
+        wp[:,:,:] = self.V[2,:Nt*step:step,:,:]
         if scaled:
             for iz in range(self.NZ):
-                up[:,iz,:] *= self.scaling[0,iz]
-                vp[:,iz,:] *= self.scaling[1,iz]
-                wp[:,iz,:] *= self.scaling[2,iz]
+                up[:,:,iz] *= self.scaling[0,iz]
+                vp[:,:,iz] *= self.scaling[1,iz]
+                wp[:,:,iz] *= self.scaling[2,iz]
 
         # write out VTK
         VTKwriter.vtk_write_structured_points( open(fname,'wb'), #binary mode
@@ -774,5 +775,5 @@ FoamFile
             dx=step*Umean*self.dt, dy=self.dy, dz=self.dz,
             dataname=['u\''],
             origin=[0.,self.y[0],self.z[0]],
-            indexorder='jki')
+            indexorder='ijk')
 

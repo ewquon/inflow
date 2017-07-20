@@ -119,6 +119,7 @@ class bts(base.specified_profile):
                 print '  V size :',self.V.nbytes/1024.**2,'MB'
             for val in np.nditer(self.V, op_flags=['writeonly']):
                 val[...] = f.read_int2()
+            self.V = self.V.swapaxes(3,2).swapaxes(2,1) # new shape: (3,self.N,self.NY,self.NZ)
 
             if self.Ntower > 0:
                 if self.verbose:
