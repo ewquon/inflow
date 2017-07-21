@@ -13,6 +13,8 @@ from binario import binaryfile
 
 class bts(base.specified_profile):
 
+    extension = '.bts'
+
     def __init__(self, fname=None, Umean=None, verbose=False):
         """Processes binary full-field time series output from TurbSim.
 
@@ -27,8 +29,8 @@ class bts(base.specified_profile):
 
 
     def readField(self,fname):
-        if not fname.endswith('.bts'):
-            fname = fname + '.bts'
+        if not fname.endswith(self.extension):
+            fname = fname + self.extension
         self._readBTS(fname)
         self.haveField = True
 
@@ -134,7 +136,7 @@ class bts(base.specified_profile):
             #
             # calculate dimensional velocity
             #
-            if self.verbose: print 'Calculating velocities'
+            if self.verbose: print 'Calculating velocities from normalized data'
             for i in range(3):
                 self.V[i,:,:,:] -= self.Vintercept[i]
                 self.V[i,:,:,:] /= self.Vslope[i]
