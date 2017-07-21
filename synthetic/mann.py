@@ -22,12 +22,14 @@ class binary(base.specified_profile):
         super(self.__class__,self).__init__(verbose)
         
         self.fnames = fnames
+        self.Umean = Umean
+        self.dt = dt
         if inputfile is not None:
             self.readInput(inputfile)
         else:
-            self.Nx = Nx
-            self.Ny = Ny
-            self.Nz = Nz
+            self.NX = Nx
+            self.NY = Ny
+            self.NZ = Nz
             self.Ncomp = Ncomp
             if Lx is None: Lx = float(Nx)
             if Ly is None: Ly = float(Ny)
@@ -35,9 +37,10 @@ class binary(base.specified_profile):
             self.Lx = Lx
             self.Ly = Ly
             self.Lz = Lz
-        self.dx = self.Lx/self.Nx
-        self.dy = self.Ly/self.Ny
-        self.dz = self.Lz/self.Nz
+        self.N = self.NX # time steps equal to x planes
+        self.dx = self.Lx/self.NX
+        self.dy = self.Ly/self.NY
+        self.dz = self.Lz/self.NZ
 
         iterablefnames = hasattr(self.fnames,'__iter__')
         if self.Ncomp > 1:
@@ -49,19 +52,25 @@ class binary(base.specified_profile):
             print 'Domain extents: ',[self.Lx,self.Ly,self.Lz]
             print 'Cell spacings: ', [self.dx,self.dy,self.dz]
 
-        if dt is None and Umean is None:
-            dt = 1.0
-            Umean = self.dx
-        elif Umean is None:
-            self.dt = dt
+        if self.dt is None and self.Umean is None:
+            self.dt = 1.0
+            self.Umean = self.dx
+        elif self.Umean is None:
             self.Umean = self.dx / self.dt
             print 'Specified dt =',self.dt
             print 'Calculated Umean =',self.Umean
-        elif dt is None:
-            self.Umean = Umean
-            self.dt = self.dx / Umean
+        elif self.dt is None:
+            self.dt = self.dx / self.Umean
             print 'Specified Umean =',self.Umean
             print 'Calculated dt =',self.dt
+
+        self.t = np.arange(self.NX)*self.dt
+        self.y = np.arange(self.NY)*self.dy
+        self.z = np.arange(self.NZ)*self.dz
+        if self.verbose:
+            print 't range:',[np.min(self.t),np.max(self.t)]
+            print 'y range:',[np.min(self.y),np.max(self.y)]
+            print 'z range:',[np.min(self.z),np.max(self.z)]
 
         if self.fnames is not None:
             self.readField(self.fnames)
@@ -88,15 +97,20 @@ class binary(base.specified_profile):
             extents = []
             for idim in range(fieldDim):
                 extents.append(readFloat())
-            turbtype = f.readline()
+            turbtype = f.readline().strip()
+            if turbtype == 'land':
+                self.Umean = readFloat()
+                self.zref = readFloat()
+                self.z0 = readFloat()
+            # TODO: process other turb types
             # can skip rest of file unless we need filenames
             if self.fnames is None:
                 remainingLines = f.readlines()
                 self.fnames = [ line.strip() for line in remainingLines[-Ncomp:] ] 
         self.Ncomp = Ncomp
-        self.Nx = dimensions[0]
-        self.Ny = dimensions[1]
-        self.Nz = dimensions[2]
+        self.NX = dimensions[0]
+        self.NY = dimensions[1]
+        self.NZ = dimensions[2]
         self.Lx = extents[0]
         self.Ly = extents[1]
         self.Lz = extents[2]
@@ -111,21 +125,24 @@ class binary(base.specified_profile):
 
 
     def readField(self,fnames):
-        self.V = np.zeros((self.Ncomp,self.Nx,self.Ny,self.Nz))
+        self.V = np.zeros((self.Ncomp,self.NX,self.NY,self.NZ))
+        self.scaling = np.ones((3,self.NZ))
+
         for icomp,fname in enumerate(fnames):
             if not fname.endswith(self.extension):
                 fname = fname + self.extension
             self._readBinary(fname, icomp)
+
         self.haveField = True
 
 
     def _readBinary(self,fname,icomp):
         if self.verbose:
             print 'Reading',fname
-        N = self.Nx * self.Ny * self.Nz
+        N = self.NX * self.NY * self.NZ
         with binaryfile(fname) as f:
             data = f.read_real4(N)
-            self.V[icomp,:,:,:] =  np.array(data).reshape((self.Nx,self.Ny,self.Nz),order='C')
+            self.V[icomp,:,:,:] =  np.array(data).reshape((self.NX,self.NY,self.NZ),order='C')
         if self.verbose:
             print 'Velocity component ranges:'
             for i in range(self.Ncomp):

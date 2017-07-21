@@ -777,3 +777,9 @@ FoamFile
             origin=[0.,self.y[0],self.z[0]],
             indexorder='ijk')
 
+
+    #****************#
+    # define aliases #
+    #****************#
+    writeVTKBlock = writeVTKSeriesAsBlock
+
