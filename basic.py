@@ -438,6 +438,10 @@ class specified_profile(object):
         1) a constant, equal for the x, y, and z directions; 
         2) a list or nd.array of scalars; or
         3) a list of lambda functions for non-tanh scaling.
+
+        Note: The scaled perturbations is no longer conservative, i.e., the
+        field is not divergence free. The cells adjacent to the inflow boundary
+        will make the inflow field solenoidal after the first pressure solve.
         """
         evalfn = False
         if isinstance(max_scaling,(list,tuple,np.ndarray)):
