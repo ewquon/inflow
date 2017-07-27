@@ -459,7 +459,12 @@ class specified_profile(object):
                 self.scaling[i,:] = max_scaling[i] * 0.5*(np.tanh(-k*(self.z-tanh_z50)) + 1.0)
             fmin = np.min(self.scaling[i,:])
             fmax = np.max(self.scaling[i,:])
-            assert( fmin >= 0. and fmax <= max_scaling[i] )
+            #assert( fmin >= 0. and fmax <= max_scaling[i] )
+            assert(fmax <= max_scaling[i])
+            if fmin < 0:
+                print 'Attempting to correct scaling function with fmin =',fmin
+                self.scaling = np.maximum(self.scaling,0)
+                fmin = 0
             print 'Updated scaling range (dir={}) : {} {}'.format(i,fmin,fmax)
         
         if output:
