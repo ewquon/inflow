@@ -1,12 +1,15 @@
 #!/usr/bin/env python
+#
+# Module for processing output from the WAsP IEC Turbulence Generator
+#
 import sys,os
 import time
 import numpy as np
 
-from inflow import base
+from inflow import basic
 from binario import binaryfile
 
-class binary(base.specified_profile):
+class windsimu_binary(basic.specified_profile):
 
     extension = '.bin'
 

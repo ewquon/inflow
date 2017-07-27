@@ -1,9 +1,14 @@
 #!/usr/bin/env python
+#
+# Module for loading turbsim data
+#
+# written by Eliot Quon (eliot.quon@nrel.gov)
+#
 import sys,os
 import time
 import numpy as np
 
-from inflow import base
+from inflow import basic
 from binario import binaryfile
 
 #from memory_profiler import profile #-- THIS IS SLOW
@@ -11,7 +16,7 @@ from binario import binaryfile
 #   mprof run turbsim_bts.py
 #   mprof plot
 
-class bts(base.specified_profile):
+class bts(basic.specified_profile):
 
     extension = '.bts'
 
