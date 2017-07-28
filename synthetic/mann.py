@@ -128,7 +128,7 @@ class windsimu_binary(basic.specified_profile):
 
 
     def readField(self,fnames):
-        self.V = np.zeros((self.Ncomp,self.NX,self.NY,self.NZ))
+        self.U = np.zeros((self.Ncomp,self.NX,self.NY,self.NZ))
         self.scaling = np.ones((3,self.NZ))
 
         for icomp,fname in enumerate(fnames):
@@ -145,9 +145,9 @@ class windsimu_binary(basic.specified_profile):
         N = self.NX * self.NY * self.NZ
         with binaryfile(fname) as f:
             data = f.read_real4(N)
-            self.V[icomp,:,:,:] =  np.array(data).reshape((self.NX,self.NY,self.NZ),order='C')
+            self.U[icomp,:,:,:] =  np.array(data).reshape((self.NX,self.NY,self.NZ),order='C')
         if self.verbose:
             print 'Velocity component ranges:'
             for i in range(self.Ncomp):
-                print '  V'+str(i)+': ',[np.min(self.V[:,:,:,i]),np.max(self.V[:,:,:,i])]
+                print '  U'+str(i)+': ',[np.min(self.U[:,:,:,i]),np.max(self.U[:,:,:,i])]
 

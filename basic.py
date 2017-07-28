@@ -191,9 +191,9 @@ class specified_profile(object):
         average of the fluctuations, i.e. the root-mean-square or
         standard deviation, which should match the output in PREFIX.sum.
         """
-        self.uu = self.V[0,:,:,:]**2
-        self.vv = self.V[1,:,:,:]**2
-        self.ww = self.V[2,:,:,:]**2
+        self.uu = self.U[0,:,:,:]**2
+        self.vv = self.U[1,:,:,:]**2
+        self.ww = self.U[2,:,:,:]**2
         self.uu_tavg = np.mean(self.uu,2) # time averages
         self.vv_tavg = np.mean(self.vv,2)
         self.ww_tavg = np.mean(self.ww,2)
@@ -225,31 +225,31 @@ class specified_profile(object):
         """
         ntiles = int(ntiles)
         print 'Creating',ntiles,'horizontal tiles'
-        print '  before:',self.V.shape
+        print '  before:',self.U.shape
         if mirror:
             # [0 1 2] --> [0 1 2 1 0 1 2 .. ]
             NYnew = (self.NY-1)*ntiles + 1
-            Vnew = np.zeros((3,self.N,NYnew,self.NZ))
-            Vnew[:,:,:self.NY,:] = self.V[:,:,:self.NY,:]
+            Unew = np.zeros((3,self.N,NYnew,self.NZ))
+            Unew[:,:,:self.NY,:] = self.U[:,:,:self.NY,:]
             delta = self.NY - 1
             flipped = True
             for i in range(1,ntiles):
                 if flipped:
-                    Vnew[:,:,i*delta+1:(i+1)*delta+1,:] = self.V[:,:,delta-1::-1,:]
+                    Unew[:,:,i*delta+1:(i+1)*delta+1,:] = self.U[:,:,delta-1::-1,:]
                 else:
-                    Vnew[:,:,i*delta+1:(i+1)*delta+1,:] = self.V[:,:,1:,:]
+                    Unew[:,:,i*delta+1:(i+1)*delta+1,:] = self.U[:,:,1:,:]
                 flipped = not flipped
-            self.V = Vnew
+            self.U = Unew
         else:
             # [0 1 2] --> [0 1 0 1 .. 0 1 2]
-            self.V = np.tile(self.V[:,:,:-1,:],(1,1,ntiles,1))
+            self.U = np.tile(self.U[:,:,:-1,:],(1,1,ntiles,1))
             plane0 = np.zeros((3,self.N,1,self.NZ))
-            plane0[:,:,0,:] = self.V[:,:,-1,:]
-            self.V = np.concatenate((self.V,plane0),axis=1)
-        print '  after :',self.V.shape
+            plane0[:,:,0,:] = self.U[:,:,-1,:]
+            self.U = np.concatenate((self.U,plane0),axis=1)
+        print '  after :',self.U.shape
 
         self.NY = NYnew
-        assert( self.V.shape == (3,self.N,self.NY,self.NZ) )
+        assert( self.U.shape == (3,self.N,self.NY,self.NZ) )
         self.y = np.arange(self.NY,dtype=self.realtype)*self.dy
 
 
@@ -270,13 +270,13 @@ class specified_profile(object):
 
         if dryrun: sys.stdout.write('(DRY RUN) ')
         print 'Resizing fluctuations field in y-dir from [', self.y[0],self.y[-1],'] to [',yMin,yMax,']'
-        print '  before:',self.V.shape
+        print '  before:',self.U.shape
         
         newNY = int(np.ceil(Ly_specified/Ly * self.NY))
-        Vnew = self.V[:,:,:newNY,:]
-        print '  after:',Vnew.shape
+        Unew = self.U[:,:,:newNY,:]
+        print '  after:',Unew.shape
         if not dryrun:
-            self.V = Vnew
+            self.U = Unew
             self.NY = newNY
 
         ynew = yMin + np.arange(newNY,dtype=self.realtype)*self.dy
@@ -321,20 +321,20 @@ class specified_profile(object):
         ioff = int((self.z[0]-zMin)/self.dz)
         if dryrun: sys.stdout.write('(DRY RUN) ')
         print 'Resizing fluctuations field in z-dir from [', self.z[0],self.z[-1],'] to [',zMin,zMax,']'
-        print '  before:',self.V.shape
+        print '  before:',self.U.shape
         
         newNZ = imax-imin+1
-        Vnew = np.zeros( (3,self.N,self.NY,newNZ) )
+        Unew = np.zeros( (3,self.N,self.NY,newNZ) )
         for iz in range(ioff):
-            Vnew[:,:,:,iz] = self.V[:,:,:,0]
+            Unew[:,:,:,iz] = self.U[:,:,:,0]
         if not shrink:
-            Vnew[:,:,:,ioff:ioff+self.NZ] = self.V
+            Unew[:,:,:,ioff:ioff+self.NZ] = self.U
         else:
             iupper = np.min(ioff+self.NZ, newNZ)
-            Vnew[:,:,:,ioff:iupper] = self.V[:,:,:,:iupper-ioff]
-        print '  after:',Vnew.shape
+            Unew[:,:,:,ioff:iupper] = self.U[:,:,:,:iupper-ioff]
+        print '  after:',Unew.shape
         if not dryrun:
-            self.V = Vnew
+            self.U = Unew
             self.NZ = newNZ
 
         znew = self.zbot + np.arange(newNZ,dtype=self.realtype)*self.dz
@@ -616,9 +616,9 @@ FoamFile
                 if not stdout=='overwrite':
                     sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 # scale fluctuations
-                up[0,0,:,:] = self.V[0,itime,:,:]
-                up[1,0,:,:] = self.V[1,itime,:,:]
-                up[2,0,:,:] = self.V[2,itime,:,:]
+                up[0,0,:,:] = self.U[0,itime,:,:]
+                up[1,0,:,:] = self.U[1,itime,:,:]
+                up[2,0,:,:] = self.U[2,itime,:,:]
                 for iz in range(self.NZ): # note: up is the original size
                     for i in range(3):
                         up[i,0,:,iz] *= self.scaling[i,iz]
@@ -692,9 +692,9 @@ FoamFile
         up = np.zeros((1,self.NY,self.NZ))
         wp = np.zeros((1,self.NY,self.NZ))
         vp = np.zeros((1,self.NY,self.NZ))
-        up[0,:,:] = self.V[0,itime,:,:]
-        vp[0,:,:] = self.V[1,itime,:,:]
-        wp[0,:,:] = self.V[2,itime,:,:]
+        up[0,:,:] = self.U[0,itime,:,:]
+        vp[0,:,:] = self.U[1,itime,:,:]
+        wp[0,:,:] = self.U[2,itime,:,:]
         if scaled:
             for iz in range(self.NZ):
                 up[0,:,iz] *= self.scaling[0,iz]
@@ -767,9 +767,9 @@ FoamFile
         up = np.zeros((Nt,self.NY,self.NZ))
         vp = np.zeros((Nt,self.NY,self.NZ))
         wp = np.zeros((Nt,self.NY,self.NZ))
-        up[:,:,:] = self.V[0,:Nt*step:step,:,:]
-        vp[:,:,:] = self.V[1,:Nt*step:step,:,:]
-        wp[:,:,:] = self.V[2,:Nt*step:step,:,:]
+        up[:,:,:] = self.U[0,:Nt*step:step,:,:]
+        vp[:,:,:] = self.U[1,:Nt*step:step,:,:]
+        wp[:,:,:] = self.U[2,:Nt*step:step,:,:]
         if scaled:
             for iz in range(self.NZ):
                 up[:,:,iz] *= self.scaling[0,iz]

@@ -121,19 +121,18 @@ class bts(basic.specified_profile):
             t0 = time.clock()
             if self.verbose: print 'Reading normalized grid data'
 
-            self.V = np.zeros((3,self.NY,self.NZ,self.N),order='F',dtype=self.realtype)
+            self.U = np.zeros((3,self.NY,self.NZ,self.N),order='F',dtype=self.realtype)
             if self.verbose:
-                print '  V size :',self.V.nbytes/1024.**2,'MB'
-            for val in np.nditer(self.V, op_flags=['writeonly']):
+                print '  U size :',self.U.nbytes/1024.**2,'MB'
+            for val in np.nditer(self.U, op_flags=['writeonly']):
                 val[...] = f.read_int2()
-            self.V = self.V.swapaxes(3,2).swapaxes(2,1) # new shape: (3,self.N,self.NY,self.NZ)
+            self.U = self.U.swapaxes(3,2).swapaxes(2,1) # new shape: (3,self.N,self.NY,self.NZ)
 
             if self.Ntower > 0:
-                if self.verbose:
-                    print 'Reading normalized tower data'
-                    print '  Vtow size :',self.Vtow.nbytes/1024.**2,'MB'
-                self.Vtow = np.zeros((3,self.Ntower,self.N),order='F',dtype=self.realtype)
-                for val in np.nditer(self.Vtow, op_flags=['writeonly']):
+                if self.verbose: print 'Reading normalized tower data'
+                self.Utow = np.zeros((3,self.Ntower,self.N),order='F',dtype=self.realtype)
+                if self.verbose: print '  Utow size :',self.Utow.nbytes/1024.**2,'MB'
+                for val in np.nditer(self.Utow, op_flags=['writeonly']):
                     val[...] = f.read_int2()
 
             if self.verbose: print '  Read velocitiy fields in',time.clock()-t0,'s'
@@ -143,17 +142,16 @@ class bts(basic.specified_profile):
             #
             if self.verbose: print 'Calculating velocities from normalized data'
             for i in range(3):
-                self.V[i,:,:,:] -= self.Vintercept[i]
-                self.V[i,:,:,:] /= self.Vslope[i]
+                self.U[i,:,:,:] -= self.Vintercept[i]
+                self.U[i,:,:,:] /= self.Vslope[i]
                 if self.Ntower > 0:
-                    self.Vtow[i,:,:] -= self.Vintercept[i]
-                    self.Vtow[i,:,:] /= self.Vslope[i]
-            self.V[0,:,:,:] -= self.Umean # uniform inflow w/ no shear assumed
+                    self.Utow[i,:,:] -= self.Vintercept[i]
+                    self.Utow[i,:,:] /= self.Vslope[i]
+            self.U[0,:,:,:] -= self.Umean # uniform inflow w/ no shear assumed
 
-            #print '  V size :',self.V.nbytes/1042.**2,'MB'
-            print '  u min/max [',np.min(self.V[0,:,:,:]),np.max(self.V[0,:,:,:]),']'
-            print '  v min/max [',np.min(self.V[1,:,:,:]),np.max(self.V[1,:,:,:]),']'
-            print '  w min/max [',np.min(self.V[2,:,:,:]),np.max(self.V[2,:,:,:]),']'
+            print '  u min/max [',np.min(self.U[0,:,:,:]),np.max(self.U[0,:,:,:]),']'
+            print '  v min/max [',np.min(self.U[1,:,:,:]),np.max(self.U[1,:,:,:]),']'
+            print '  w min/max [',np.min(self.U[2,:,:,:]),np.max(self.U[2,:,:,:]),']'
 
             self.scaling = np.ones((3,self.NZ))
 
