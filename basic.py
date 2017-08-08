@@ -23,7 +23,7 @@ class specified_profile(object):
         * Spacings/step size: dt, dy, dz
         * Rectilinear grid: y, z
         * Sampling times: t
-        * Velocity field: V (with shape==(3,Ntimes,NY,NZ))
+        * Velocity field: U (with shape==(3,Ntimes,NY,NZ))
         * Scaling function: scaling (shape==(3,NZ))
 
         Optionally, the following parameters may be set:
@@ -37,6 +37,26 @@ class specified_profile(object):
         self.meanProfilesRead = False
         self.variancesRead = False
         self.tkeProfileSet = False
+
+
+    def createEmptyField(self, Ly, Lz, Ny, Nz)
+        """Create field with no fluctuations, for development and
+        testing (e.g., to create a smooth inflow)
+        """
+        self.N = 2
+        self.NY = Ny
+        self.NZ = Nz
+
+        self.t = [0, 1000.0]
+        self.y = np.linspace(0, Ly, Ny)
+        self.z = np.linspace(0, Lz, Nz)
+
+        self.dt = t[1] - t[0]
+        self.dy = y[1] - y[0]
+        self.dz = z[1] - z[0]
+
+        self.U = np.zeros((3,self.N,self.NY,self.NZ))
+        self.scaling = np.ones((3,self.NZ))
 
     
     def readField(self):
