@@ -39,22 +39,21 @@ class specified_profile(object):
         self.tkeProfileSet = False
 
 
-    def createEmptyField(self, Ly, Lz, Ny, Nz)
+    def createEmptyField(self, Ly, Lz, Ny, Nz):
         """Create field with no fluctuations, for development and
         testing (e.g., to create a smooth inflow)
         """
-        self.N = 2
+        self.N = 3
         self.NY = Ny
         self.NZ = Nz
 
-        self.t = [0, 1000.0]
+        self.t = [0, 1000.0, 2000.0]
         self.y = np.linspace(0, Ly, Ny)
         self.z = np.linspace(0, Lz, Nz)
 
-        self.dt = t[1] - t[0]
-        self.dy = y[1] - y[0]
-        self.dz = z[1] - z[0]
-
+        self.dt = self.t[1] - self.t[0]
+        self.dy = self.y[1] - self.y[0]
+        self.dz = self.z[1] - self.z[0]
         self.U = np.zeros((3,self.N,self.NY,self.NZ))
         self.scaling = np.ones((3,self.NZ))
 
@@ -611,7 +610,7 @@ FoamFile
 // Average
 {avgValue}\n\n"""
         if Tend is None: 
-            Tend = Tstart + self.period
+            Tend = self.t[-1]
         istart = int(self.realtype(Tstart) / self.dt)
         iend = int(self.realtype(Tend) / self.dt)
         print 'Outputting time length',(iend-istart)*self.dt
