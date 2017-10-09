@@ -213,9 +213,9 @@ class specified_profile(object):
         self.uu = self.U[0,:,:,:]**2
         self.vv = self.U[1,:,:,:]**2
         self.ww = self.U[2,:,:,:]**2
-        self.uu_tavg = np.mean(self.uu,2) # time averages
-        self.vv_tavg = np.mean(self.vv,2)
-        self.ww_tavg = np.mean(self.ww,2)
+        self.uu_tavg = np.mean(self.uu,0) # time averages
+        self.vv_tavg = np.mean(self.vv,0)
+        self.ww_tavg = np.mean(self.ww,0)
         self.uu_mean = np.mean( self.uu_tavg ) # space/time (ensemble) average
         self.vv_mean = np.mean( self.vv_tavg )
         self.ww_mean = np.mean( self.ww_tavg )
@@ -224,13 +224,14 @@ class specified_profile(object):
 
         if output is not None:
             with open(output,'w') as f:
-                f.write('   Height   Standard deviation at grid points for the u component:\n')
+                f.write('Spatial average of <u\'u\'>, <v\'v\'>, <w\'w\'> : {} {} {}\n'.format(self.uu_mean,self.vv_mean,self.ww_mean))
+                f.write('\n   Height   Standard deviation at grid points for the u component:\n')
                 for i,zi in enumerate(self.z):
                         f.write('z= {:.1f} : {}\n'.format(zi,np.sqrt(self.uu_tavg[:,i])))
-                f.write('   Height   Standard deviation at grid points for the v component:\n')
+                f.write('\n   Height   Standard deviation at grid points for the v component:\n')
                 for i,zi in enumerate(self.z):
                         f.write('z= {:.1f} : {}\n'.format(zi,np.sqrt(self.vv_tavg[:,i])))
-                f.write('   Height   Standard deviation at grid points for the w component:\n')
+                f.write('\n   Height   Standard deviation at grid points for the w component:\n')
                 for i,zi in enumerate(self.z):
                         f.write('z= {:.1f} : {}\n'.format(zi,np.sqrt(self.ww_tavg[:,i])))
             print 'Wrote out',output
