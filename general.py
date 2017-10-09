@@ -57,6 +57,7 @@ class specified_profile(object):
         self.U = np.zeros((3,self.N,self.NY,self.NZ))
         self.scaling = np.ones((3,self.NZ))
 
+        self.haveField = True
     
     def readField(self):
         """Stub to read inflow field"""
