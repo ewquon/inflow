@@ -808,8 +808,49 @@ FoamFile
             indexorder='ijk')
 
 
-    #****************#
-    # define aliases #
-    #****************#
+    def writeVTK_zslice(self, fname, idx, scaled=True):
+        """Write out binary VTK file with a single vector field at a
+        specified vertical index.
+        """
+        if not self.meanProfilesSet: self.applyMeanProfiles()
+
+        print 'Writing out VTK slice',idx,' at z=',self.z[idx]
+
+        # scale fluctuations
+        up = np.zeros((self.N,self.NY,1))
+        wp = np.zeros((self.N,self.NY,1))
+        vp = np.zeros((self.N,self.NY,1))
+        up[:,:,0] = self.U[0,:,:,idx]
+        vp[:,:,0] = self.U[1,:,:,idx]
+        wp[:,:,0] = self.U[2,:,:,idx]
+        if scaled:
+            up[:,:,0] *= self.scaling[0,idx]
+            vp[:,:,0] *= self.scaling[1,idx]
+            wp[:,:,0] *= self.scaling[2,idx]
+
+        # calculate instantaneous velocity
+        U = up.copy()
+        V = vp.copy()
+        W = wp.copy()
+        U[:,:,0] += self.Uinlet[idx,0]
+        V[:,:,0] += self.Uinlet[idx,1]
+        W[:,:,0] += self.Uinlet[idx,2]
+
+        # write out VTK
+        VTKwriter.vtk_write_structured_points( open(fname,'wb'), #binary mode
+            self.N, self.NY, 1,
+            [ U,V,W, up,vp,wp ],
+            datatype=['vector','vector'],
+            dx=self.dx, dy=self.dy, dz=1,
+            dataname=['U','u\''],
+            origin=[0.,self.y[0],self.z[0]],
+            indexorder='ijk')
+
+
+
+    """
+    Define aliases here
+    """
     writeVTKBlock = writeVTKSeriesAsBlock
+
 
