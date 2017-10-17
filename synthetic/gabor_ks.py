@@ -7,9 +7,9 @@ import sys,os
 import time
 import numpy as np
 
-from inflow.general import specified_profile
+from inflow.translator import InflowPlane
 
-class GaborKS(specified_profile):
+class GaborKS(InflowPlane):
 
     def __init__(self, prefix=None,
             tidx=0,

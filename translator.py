@@ -9,10 +9,9 @@ import VTKwriter
 
 import time
 
-class specified_profile(object):
+class InflowPlane(object):
 
     realtype = np.float32
-
 
     def __init__(self, verbose=False):
         """Defaults are set here

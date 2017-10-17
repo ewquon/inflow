@@ -6,10 +6,10 @@ import sys,os
 import time
 import numpy as np
 
-from inflow.general import specified_profile
+from inflow.translator import InflowPlane
 from binario import binaryfile
 
-class windsimu_binary(specified_profile):
+class windsimu_binary(InflowPlane):
 
     extension = '.bin'
 

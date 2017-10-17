@@ -8,7 +8,7 @@ import sys,os
 import time
 import numpy as np
 
-from inflow.general import specified_profile
+from inflow.translator import InflowPlane
 from binario import binaryfile
 
 #from memory_profiler import profile #-- THIS IS SLOW
@@ -16,7 +16,7 @@ from binario import binaryfile
 #   mprof run turbsim_bts.py
 #   mprof plot
 
-class bts(specified_profile):
+class bts(InflowPlane):
 
     extension = '.bts'
 
