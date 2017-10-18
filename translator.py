@@ -4,10 +4,12 @@
 # written by Eliot Quon (eliot.quon.nrel.gov) - 2017-07-10
 #
 import sys,os
-import numpy as np
-import VTKwriter
-
 import time
+
+import numpy as np
+
+import VTKwriter
+from SOWFA.timeVaryingMappedBC import pointsheader, dataheader
 
 class InflowPlane(object):
 
@@ -30,11 +32,9 @@ class InflowPlane(object):
         """
         self.verbose = verbose
         self.Umean = None
+        self.meanFlowSet = False # True after applyMeanProfiles() is called
 
         self.haveField = False
-        self.meanProfilesSet = False
-        self.meanProfilesRead = False
-        self.variancesRead = False
         self.tkeProfileSet = False
 
 
@@ -62,146 +62,6 @@ class InflowPlane(object):
         """Stub to read inflow field"""
         print 'This function should be overridden for each inflow class...'
         print 'No inflow data were read.'
-
-
-    def setMeanProfiles(self, z,
-            U, V, T,
-            uu=None,vv=None,ww=None):
-        """Sets the mean velocity and temperature profiles (and,
-        optionally, the variance profiles as well) from user-specified
-        np.ndarrays.
-
-        Calls applyInterpolatedMeanProfile() to set up interpolation
-        functions.
-        """
-        self.z_profile = np.array(z)
-        self.U_profile = np.array(U)
-        self.V_profile = np.array(V)
-        self.T_profile = np.array(T)
-        if uu is None:
-            self.uu_profile = np.zeros(len(z))
-        else:
-            self.uu_profile = np.array(uu)
-        if vv is None:
-            self.vv_profile = np.zeros(len(z))
-        else:
-            self.vv_profile = np.array(vv)
-        if ww is None:
-            self.ww_profile = np.zeros(len(z))
-        else:
-            self.ww_profile = np.array(ww)
-        meanNZ = len(z)
-        assert(len(U_profile) == meanNZ)
-        assert(len(V_profile) == meanNZ)
-        assert(len(T_profile) == meanNZ)
-        assert(len(uu_profile) == meanNZ)
-        assert(len(vv_profile) == meanNZ)
-        assert(len(ww_profile) == meanNZ)
-
-        self.meanProfilesRead = True
-
-        if self.haveField:
-            self.applyInterpolatedMeanProfile()
-        else:
-            print 'Note: Interpolated mean profile has not been set up since'
-            print '      inflow data have not been read.'
-
-
-
-    def readAllProfiles(self,fname='averagingProfiles.csv',delim=','):
-        """Read all mean profiles (calculated separately) from a file.
-        Expected columns are:
-            0  1  2  3  4   5  6  7  8  9 10   11  12  13  14  15  16
-            z, U, V, W, T, uu,vv,ww,uv,uw,vw, R11,R22,R33,R12,R13,R23
-
-        Calls applyInterpolatedMeanProfile() to set up interpolation
-        functions.
-        """
-        data = np.loadtxt(fname,delimiter=delim)
-        self.z_profile = np.array(data[:,0])
-        self.U_profile = np.array(data[:,1])
-        self.V_profile = np.array(data[:,2])
-        self.T_profile = np.array(data[:,4])
-        self.uu_profile = np.array(data[:,5])
-        self.vv_profile = np.array(data[:,6])
-        self.ww_profile = np.array(data[:,7])
-
-        self.meanProfilesRead = True
-
-        if self.haveField:
-            self.applyInterpolatedMeanProfile()
-        else:
-            print 'Note: Interpolated mean profile has not been set up since'
-            print '      inflow data have not been read.'
-
-
-    def readMeanProfile(self,
-            Ufile='U.dat',
-            Vfile='V.dat',
-            Tfile='T.dat',
-            delim=None):
-        """Read planar averages (postprocessed separately) from
-        individual files.  These are saved into arrays for interpolation
-        assuming that the heights in all files are the same.
-
-        Calls applyInterpolatedMeanProfile() to set up interpolation
-        functions.
-        """
-        Udata = np.loadtxt(Ufile,delimiter=delim)
-        hmean = Udata[:,0]
-        Umean = Udata[:,1]
-        Vmean = np.loadtxt(Vfile,delimiter=delim)[:,1]
-        Tmean = np.loadtxt(Tfile,delimiter=delim)[:,1]
-        assert( len(hmean)==len(Umean)
-            and len(Umean)==len(Vmean)
-            and len(Vmean)==len(Tmean) )
-        self.z_profile = np.array(hmean)
-        self.U_profile = np.array(Umean)
-        self.V_profile = np.array(Vmean)
-        self.T_profile = np.array(Tmean)
-
-        self.meanProfilesRead = True
-
-        if self.haveField:
-            self.applyInterpolatedMeanProfile()
-        else:
-            print 'Note: Interpolated mean profile has not been set up since'
-            print '      inflow data have not been read.'
-
-
-    def readVarianceProfile(self,
-            uufile='uu.dat',
-            vvfile='vv.dat',
-            wwfile='ww.dat',
-            delim=None):
-        """Read planar averages (postprocessed separately) from
-        individual files.  These are saved into arrays for interpolation
-        assuming that the heights in all files are the same.
-        """
-        uudata = np.loadtxt(uufile,delimiter=delim)
-        hmean = uudata[:,0]
-        uumean = uudata[:,1]
-        vvmean = np.loadtxt(vvfile,delimiter=delim)[:,1]
-        wwmean = np.loadtxt(wwfile,delimiter=delim)[:,1]
-        assert( len(hmean)==len(uumean)
-            and len(uumean)==len(vvmean)
-            and len(vvmean)==len(wwmean) )
-        if self.meanProfilesRead:
-            assert( np.all(np.array(hmean) == self.z_profile) )
-
-        self.uu_profile = np.array( uumean )
-        self.vv_profile = np.array( vvmean )
-        self.ww_profile = np.array( wwmean )
-
-        #from scipy import interpolate
-        #self.uu_fn = interpolate.interp1d(hmean, uumean,
-        #    kind='linear',fill_value='extrapolate')
-        #self.vv_fn = interpolate.interp1d(hmean, vvmean,
-        #    kind='linear',fill_value='extrapolate')
-        #self.ww_fn = interpolate.interp1d(hmean, wwmean,
-        #    kind='linear',fill_value='extrapolate')
-
-        self.variancesRead = True
 
 
     def calculateRMS(self,output=None):
@@ -307,7 +167,7 @@ class InflowPlane(object):
             print '(DRY RUN) y coordinates:',ynew
 
         # flag update for mean profile
-        self.meanProfilesSet = False
+        self.meanFlowSet = False
 
 
     def resizeZ(self,zMin=None,zMax=None,shrink=False,dryrun=False):
@@ -369,7 +229,7 @@ class InflowPlane(object):
             self.scaling = np.ones((3,newNZ))
 
         # flag update for mean profile
-        self.meanProfilesSet = False
+        self.meanFlowSet = False
 
 
     def applyInterpolatedMeanProfile(self):
@@ -391,34 +251,6 @@ class InflowPlane(object):
             Uprofile=lambda z: [self.Ufn(z),self.Vfn(z),0.0],
             Tprofile=lambda z: self.Tfn(z)
         )
-
-
-    def applyMeanProfiles(self,
-            Uprofile=lambda z:[0.0,0.0,0.0],
-            Tprofile=lambda z:0.0
-        ):
-        """Sets the mean velocity and temperature profiles (which
-        affects output from writeMappedBC and writeVTK).  Called by
-        readMeanProfile after reading in post-processed planar averages.
-
-        Can also be directly called with a user-specified analytical
-        profile.
-        """
-        if self.meanProfilesSet:
-            print 'Note: Mean profiles have already been set and will be overwritten'
-
-        self.Uinlet = np.zeros((self.NZ,3))
-        self.Tinlet = np.zeros(self.NZ)
-        for iz,z in enumerate(self.z):
-            self.Uinlet[iz,:] = Uprofile(z)
-            self.Tinlet[iz]   = Tprofile(z)
-
-        if self.verbose:
-            print 'Specified mean profile:  z  U  T'
-            for iz,U in enumerate(self.Uinlet):
-                print self.z[iz],U,self.Tinlet[iz]
-
-        self.meanProfilesSet = True
 
 
     def setTkeProfile(self,k_profile=lambda z:0.0):
@@ -528,16 +360,12 @@ class InflowPlane(object):
             print 'Creating output dir :',outputdir
             os.makedirs(outputdir)
 
-        if not self.meanProfilesSet:
+        if not self.meanFlowSet:
             print 'Note: Mean profiles have not been set or read from files'
             self.applyMeanProfiles() # set up inlet profile functions
-        if writek and not self.meanProfilesSet:
+        if writek and not self.meanFlowSet:
             print 'Note: Mean TKE profile has not been set'
             self.setTkeProfile()
-
-        if writeU:
-            # for scaling fluctuations
-            up = np.zeros((3,1,self.NY,self.NZ))
 
         if LESyfac >= 1 and LESzfac >= 1:
             NY = int( LESyfac*(self.NY-1) ) + 1
@@ -563,26 +391,10 @@ class InflowPlane(object):
         #
         # write points file
         #
-        pointshdr = """/*--------------------------------*- C++ -*----------------------------------*\\
-| =========                 |                                                 |
-| \\\\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\\\    /   O peration     | Version:  2.4.x                                 |
-|   \\\\  /    A nd           | Web:      www.OpenFOAM.org                      |
-|    \\\\/     M anipulation  |                                                 |
-\\*---------------------------------------------------------------------------*/
-FoamFile
-{{
-    version     2.0;
-    format      ascii;
-    class       vectorField;
-    location    "constant/boundaryData/{patchName}";
-    object      points;
-}}
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //\n\n"""
         fname = outputdir + os.sep + 'points'
         print 'Writing',fname
         with open(fname,'w') as f:
-            f.write(pointshdr.format(patchName=bcname))
+            f.write(pointsheader.format(patchName=bcname))
             f.write('{:d}\n(\n'.format(NY*NZ))
             for k in range(NZ):
                 for j in range(NY):
@@ -592,32 +404,16 @@ FoamFile
         #
         # write time dirs
         #
-        datahdr = """/*--------------------------------*- C++ -*----------------------------------*\\
-| =========                 |                                                 |
-| \\\\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\\\    /   O peration     | Version:  2.4.x                                 |
-|   \\\\  /    A nd           | Web:      www.OpenFOAM.org                      |
-|    \\\\/     M anipulation  |                                                 |
-\\*---------------------------------------------------------------------------*/
-FoamFile
-{{
-    version     2.0;
-    format      ascii;
-    class       {patchType}AverageField;
-    location    "constant/boundaryData/{patchName}/{timeName}";
-    object      values;
-}}
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-// Average
-{avgValue}\n\n"""
         if Tend is None: 
             Tend = self.t[-1]
         istart = int(self.realtype(Tstart) / self.dt)
         iend = int(self.realtype(Tend) / self.dt)
         print 'Outputting time length',(iend-istart)*self.dt
-        #
-        # time-step loop
-        #
+
+        if writeU:
+            u = np.zeros((3,self.NY,self.NZ))
+
+        # begin time-step loop
         for i in range(istart,iend,interval):
             itime = np.mod(i-istart,self.N)
             tname = '{:f}'.format(self.realtype(i*self.dt)).rstrip('0').rstrip('.')
@@ -628,54 +424,46 @@ FoamFile
             if stdout=='overwrite':
                 sys.stdout.write('\rWriting {}* (itime={})'.format(prefix,itime))
 
-            #
-            # write out U
-            #
+            # - write out U
             if writeU:
                 fname = prefix + 'U'
                 if not stdout=='overwrite':
                     sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 # scale fluctuations
-                up[0,0,:,:] = self.U[0,itime,:,:]
-                up[1,0,:,:] = self.U[1,itime,:,:]
-                up[2,0,:,:] = self.U[2,itime,:,:]
-                for iz in range(self.NZ): # note: up is the original size
+                u[:,:,:] = self.U[:,itime,:,:]
+                for iz in range(self.NZ): # note: u is the original size
                     for i in range(3):
-                        up[i,0,:,iz] *= self.scaling[i,iz]
+                        u[i,:,iz] *= self.scaling[i,iz]
                 with open(fname,'w') as f:
-                    f.write(datahdr.format(patchType='vector',patchName=bcname,timeName=tname,avgValue='(0 0 0)'))
+                    f.write(dataheader.format(patchType='vector',patchName=bcname,timeName=tname,avgValue='(0 0 0)'))
                     f.write('{:d}\n(\n'.format(NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
                             f.write('({v[0]:f} {v[1]:f} {v[2]:f})\n'.format(
-                                v=self.Uinlet[kidx[k],:] + up[:,0,jidx[j],kidx[k]]
+                                v=self.Uinlet[kidx[k],:] + u[:,jidx[j],kidx[k]]
                             ))
                     f.write(')\n')
 
-            #
-            # write out T
-            #
+            # - write out T
             if writeT:
                 fname = prefix + 'T'
                 if not stdout=='overwrite':
                     sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 with open(fname,'w') as f:
-                    f.write(datahdr.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
+                    f.write(dataheader.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
                     f.write('{:d}\n(\n'.format(NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
                             f.write('{s:f}\n'.format(s=self.Tinlet[kidx[k]]))
                     f.write(')\n')
 
-            #
-            # write out k
-            #
+            # - write out k
             if writek:
                 fname = prefix + 'k'
                 if not stdout=='overwrite':
                     sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 with open(fname,'w') as f:
-                    f.write(datahdr.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
+                    f.write(dataheader.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
                     f.write('{:d}\n(\n'.format(NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
@@ -695,7 +483,7 @@ FoamFile
         """Write out binary VTK file with a single vector field for a
         specified time index or output time.
         """
-        if not self.meanProfilesSet: self.applyMeanProfiles()
+        if not self.meanFlowSet: self.applyMeanProfiles()
 
         if output_time:
             itime = int(output_time / self.dt)
@@ -811,7 +599,7 @@ FoamFile
         """Write out binary VTK file with a single vector field at a
         specified vertical index.
         """
-        if not self.meanProfilesSet: self.applyMeanProfiles()
+        if not self.meanFlowSet: self.applyMeanProfiles()
 
         print 'Writing out VTK slice',idx,'at y=',self.y[idx],'to',fname
 
@@ -852,7 +640,7 @@ FoamFile
         """Write out binary VTK file with a single vector field at a
         specified vertical index.
         """
-        if not self.meanProfilesSet: self.applyMeanProfiles()
+        if not self.meanFlowSet: self.applyMeanProfiles()
 
         print 'Writing out VTK slice',idx,'at z=',self.z[idx],'to',fname
 
