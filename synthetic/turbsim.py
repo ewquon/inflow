@@ -122,8 +122,10 @@ class bts(InflowPlane):
             if self.verbose: print 'Reading normalized grid data'
 
             self.U = np.zeros((3,self.NY,self.NZ,self.N),order='F',dtype=self.realtype)
+            self.T = np.zeros((self.N,self.NY,self.NZ))
             if self.verbose:
                 print '  U size :',self.U.nbytes/1024.**2,'MB'
+
             for val in np.nditer(self.U, op_flags=['writeonly']):
                 val[...] = f.read_int2()
             self.U = self.U.swapaxes(3,2).swapaxes(2,1) # new shape: (3,self.N,self.NY,self.NZ)

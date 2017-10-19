@@ -89,6 +89,7 @@ class GaborKS(InflowPlane):
 
     def readField(self,fnames):
         self.U = np.zeros((self.Ncomp,self.NX,self.NY,self.NZ))
+        self.T = np.zeros((self.NX,self.NY,self.NZ))
         self.scaling = np.ones((3,self.NZ))
 
         for icomp,fname in enumerate(self.fnames):

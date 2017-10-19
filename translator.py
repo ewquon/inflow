@@ -8,8 +8,9 @@ import time
 
 import numpy as np
 
-import VTKwriter
-from SOWFA.timeVaryingMappedBC import pointsheader, dataheader
+import specified_mean
+from datatools.vtkTools import vtk_write_structured_points
+from datatools.SOWFA.timeVaryingMappedBC import pointsheader, dataheader
 
 class InflowPlane(object):
 
@@ -25,17 +26,33 @@ class InflowPlane(object):
         * Rectilinear grid: y, z
         * Sampling times: t
         * Velocity field: U (with shape==(3,Ntimes,NY,NZ))
+        * Potential temperature field: T (with shape==(Ntimes,NY,NZ))
         * Scaling function: scaling (shape==(3,NZ))
 
         Optionally, the following parameters may be set:
         * Reference velocity: Umean
         """
         self.verbose = verbose
-        self.Umean = None
-        self.meanFlowSet = False # True after applyMeanProfiles() is called
+        self.Umean = None # reference velocity
+        self.inletMean = None # a specified_mean object, which may be a profile or (time-varying) inflow plane
+        self.haveField = False # True after the velocity field has been read
 
-        self.haveField = False
-        self.tkeProfileSet = False
+        # set by calculateRMS
+        self.uu_mean = None
+        self.vv_mean = None
+        self.ww_mean = None
+
+        # for backwards compatibility (set by readAllProfiles or readVarianceProfile)
+        self.z_profile = None
+        self.uu_profile = None
+        self.vv_profile = None
+        self.ww_profile = None
+
+
+    def readField(self):
+        """Stub to read inflow field"""
+        print 'This function should be overridden for each inflow class...'
+        print 'No inflow data were read.'
 
 
     def createEmptyField(self, Ly, Lz, Ny, Nz):
@@ -54,15 +71,11 @@ class InflowPlane(object):
         self.dy = self.y[1] - self.y[0]
         self.dz = self.z[1] - self.z[0]
         self.U = np.zeros((3,self.N,self.NY,self.NZ))
+        self.T = np.zeros((self.N,self.NY,self.NZ))
         self.scaling = np.ones((3,self.NZ))
 
         self.haveField = True
     
-    def readField(self):
-        """Stub to read inflow field"""
-        print 'This function should be overridden for each inflow class...'
-        print 'No inflow data were read.'
-
 
     def calculateRMS(self,output=None):
         """Calculate root-mean square or standard deviation of the
@@ -97,6 +110,12 @@ class InflowPlane(object):
             print 'Wrote out',output
 
 
+    #===========================================================================
+    #
+    # Domain manipulation
+    #
+    #===========================================================================
+
     def tileY(self,ntiles,mirror=False):
         """Duplicate field in lateral direction
         'ntiles' is the final number of panels including the original
@@ -110,22 +129,31 @@ class InflowPlane(object):
             # [0 1 2] --> [0 1 2 1 0 1 2 .. ]
             NYnew = (self.NY-1)*ntiles + 1
             Unew = np.zeros((3,self.N,NYnew,self.NZ))
+            Tnew = np.zeros((  self.N,NYnew,self.NZ))
             Unew[:,:,:self.NY,:] = self.U[:,:,:self.NY,:]
+            Tnew[  :,:self.NY,:] = self.T[  :,:self.NY,:]
             delta = self.NY - 1
             flipped = True
             for i in range(1,ntiles):
                 if flipped:
                     Unew[:,:,i*delta+1:(i+1)*delta+1,:] = self.U[:,:,delta-1::-1,:]
+                    Tnew[  :,i*delta+1:(i+1)*delta+1,:] = self.T[  :,delta-1::-1,:]
                 else:
                     Unew[:,:,i*delta+1:(i+1)*delta+1,:] = self.U[:,:,1:,:]
+                    Tnew[  :,i*delta+1:(i+1)*delta+1,:] = self.T[  :,1:,:]
                 flipped = not flipped
             self.U = Unew
+            self.T = Tnew
         else:
             # [0 1 2] --> [0 1 0 1 .. 0 1 2]
             self.U = np.tile(self.U[:,:,:-1,:],(1,1,ntiles,1))
-            plane0 = np.zeros((3,self.N,1,self.NZ))
-            plane0[:,:,0,:] = self.U[:,:,-1,:]
-            self.U = np.concatenate((self.U,plane0),axis=1)
+            self.T = np.tile(self.T[  :,:-1,:],(  1,ntiles,1))
+            Uplane0 = np.zeros((3,self.N,1,self.NZ))
+            Tplane0 = np.zeros((  self.N,1,self.NZ))
+            Uplane0[:,:,0,:] = self.U[:,:,-1,:]
+            Tplane0[  :,0,:] = self.T[  :,-1,:]
+            self.U = np.concatenate((self.U,Uplane0),axis=1)
+            self.T = np.concatenate((self.T,Tplane0),axis=1)
         print '  after :',self.U.shape
 
         self.NY = NYnew
@@ -154,9 +182,11 @@ class InflowPlane(object):
         
         newNY = int(np.ceil(Ly_specified/Ly * self.NY))
         Unew = self.U[:,:,:newNY,:]
+        Tnew = self.T[  :,:newNY,:]
         print '  after:',Unew.shape
         if not dryrun:
             self.U = Unew
+            self.T = Tnew
             self.NY = newNY
 
         ynew = yMin + np.arange(newNY,dtype=self.realtype)*self.dy
@@ -167,7 +197,7 @@ class InflowPlane(object):
             print '(DRY RUN) y coordinates:',ynew
 
         # flag update for mean profile
-        self.meanFlowSet = False
+       #self.inletMean.meanFlowSet = False
 
 
     def resizeZ(self,zMin=None,zMax=None,shrink=False,dryrun=False):
@@ -204,17 +234,22 @@ class InflowPlane(object):
         print '  before:',self.U.shape
         
         newNZ = imax-imin+1
-        Unew = np.zeros( (3,self.N,self.NY,newNZ) )
+        Unew = np.zeros((3,self.N,self.NY,newNZ))
+        Tnew = np.zeros((  self.N,self.NY,newNZ))
         for iz in range(ioff):
             Unew[:,:,:,iz] = self.U[:,:,:,0]
+            Tnew[  :,:,iz] = self.T[  :,:,0]
         if not shrink:
             Unew[:,:,:,ioff:ioff+self.NZ] = self.U
+            Tnew[  :,:,ioff:ioff+self.NZ] = self.T
         else:
             iupper = np.min(ioff+self.NZ, newNZ)
             Unew[:,:,:,ioff:iupper] = self.U[:,:,:,:iupper-ioff]
+            Tnew[  :,:,ioff:iupper] = self.T[  :,:,:iupper-ioff]
         print '  after:',Unew.shape
         if not dryrun:
             self.U = Unew
+            self.T = Tnew
             self.NZ = newNZ
 
         znew = self.zbot + np.arange(newNZ,dtype=self.realtype)*self.dz
@@ -229,44 +264,65 @@ class InflowPlane(object):
             self.scaling = np.ones((3,newNZ))
 
         # flag update for mean profile
-        self.meanFlowSet = False
+       #self.inletMean.meanFlowSet = False
 
 
-    def applyInterpolatedMeanProfile(self):
-        """Helper routine to calculate interpolation functions after
-        mean profiles have been input.
+    #===========================================================================
+    #
+    # Mean flow set up
+    #
+    #===========================================================================
 
-        Sets Ufn, Vfn, and Tfn that can be called at an arbitrary
-        height.
-        """
-        from scipy import interpolate
-        self.Ufn = interpolate.interp1d(self.z_profile, self.U_profile,
-                kind='linear',fill_value='extrapolate') 
-        self.Vfn = interpolate.interp1d(self.z_profile, self.V_profile,
-                kind='linear',fill_value='extrapolate') 
-        self.Tfn = interpolate.interp1d(self.z_profile, self.T_profile,
-                kind='linear',fill_value='extrapolate')
+    def readAllProfiles(self,*args,**kwargs):
+        """Automatically create a new specified_mean instance and call
+        the appropriate input function"""
+        if self.inletMean is None:
+            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+        self.inletMean.readAllProfiles(*args,**kwargs)
+        # for backwards compatibility:
+        self.z_profile  = self.inletMean.z_profile
+        self.uu_profile = self.inletMean.uu_profile
+        self.vv_profile = self.inletMean.vv_profile
+        self.ww_profile = self.inletMean.ww_profile
 
-        self.applyMeanProfiles(
-            Uprofile=lambda z: [self.Ufn(z),self.Vfn(z),0.0],
-            Tprofile=lambda z: self.Tfn(z)
-        )
+    def readMeanProfile(self,*args,**kwargs):
+        """Automatically create a new specified_mean instance and call
+        the appropriate input function"""
+        if self.inletMean is None:
+            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+        self.inletMean.readMeanProfile(*args,**kwargs)
+        # for backwards compatibility:
+        self.z_profile  = self.inletMean.z_profile
 
+    def readVarianceProfile(self,*args,**kwargs):
+        """Automatically create a new specified_mean instance and call
+        the appropriate input function"""
+        if self.inletMean is None:
+            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+        self.inletMean.readVarianceProfile(*args,**kwargs)
+        # for backwards compatibility:
+        self.z_profile  = self.inletMean.z_profile
+        self.uu_profile = self.inletMean.uu_profile
+        self.vv_profile = self.inletMean.vv_profile
+        self.ww_profile = self.inletMean.ww_profile
 
-    def setTkeProfile(self,k_profile=lambda z:0.0):
-        """Sets the mean TKE profiles (affects output from writeMappedBC)
+    def setMeanProfile(self,*args,**kwargs):
+        """Automatically create a new specified_mean instance and call
+        the appropriate input function"""
+        if self.inletMean is None:
+            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+        self.inletMean.setMeanProfiles(*args,**kwargs)
+        # for backwards compatibility:
+        self.z_profile  = self.inletMean.z_profile
 
-        Can also be directly called with a user-specified analytical profile.
-        """
-        self.kinlet = np.zeros(self.NZ)
-        for iz,z in enumerate(self.z):
-            self.kinlet[iz] = k_profile(z)
-
-        #print 'Set TKE profile:  z  k'
-        #for iz,k in enumerate(self.kinlet):
-        #    print self.z[iz],k
-
-        self.tkeProfileSet = True
+    def setTkeProfile(self,*args,**kwargs):
+        """Automatically create a new specified_mean instance and call
+        the appropriate input function"""
+        if self.inletMean is None:
+            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+        self.inletMean.setTkeProfile(*args,**kwargs)
+        # for backwards compatibility:
+        self.z_profile  = self.inletMean.z_profile
 
 
     def setScaling(self,
@@ -336,6 +392,12 @@ class InflowPlane(object):
             print 'Wrote scaling function to',output
 
 
+    #===========================================================================
+    #
+    # Output routines
+    #
+    #===========================================================================
+
     def writeMappedBC(self,
             outputdir='boundaryData',
             interval=1,
@@ -360,10 +422,10 @@ class InflowPlane(object):
             print 'Creating output dir :',outputdir
             os.makedirs(outputdir)
 
-        if not self.meanFlowSet:
+        if not self.inletMean.meanFlowSet:
             print 'Note: Mean profiles have not been set or read from files'
-            self.applyMeanProfiles() # set up inlet profile functions
-        if writek and not self.meanFlowSet:
+            self.inletMean.setup() # set up inlet profile functions
+        if writek and not self.inletMean.meanFlowSet:
             print 'Note: Mean TKE profile has not been set'
             self.setTkeProfile()
 
@@ -412,6 +474,8 @@ class InflowPlane(object):
 
         if writeU:
             u = np.zeros((3,self.NY,self.NZ))
+        if writeT:
+            the = np.zeros((self.NY,self.NZ))
 
         # begin time-step loop
         for i in range(istart,iend,interval):
@@ -434,14 +498,14 @@ class InflowPlane(object):
                 for iz in range(self.NZ): # note: u is the original size
                     for i in range(3):
                         u[i,:,iz] *= self.scaling[i,iz]
+                u = self.inletMean.addUmean(u)
+
                 with open(fname,'w') as f:
                     f.write(dataheader.format(patchType='vector',patchName=bcname,timeName=tname,avgValue='(0 0 0)'))
                     f.write('{:d}\n(\n'.format(NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
-                            f.write('({v[0]:f} {v[1]:f} {v[2]:f})\n'.format(
-                                v=self.Uinlet[kidx[k],:] + u[:,jidx[j],kidx[k]]
-                            ))
+                            f.write('({v[0]:f} {v[1]:f} {v[2]:f})\n'.format(v=u[:,jidx[j],kidx[k]]))
                     f.write(')\n')
 
             # - write out T
@@ -449,12 +513,16 @@ class InflowPlane(object):
                 fname = prefix + 'T'
                 if not stdout=='overwrite':
                     sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
+
+                the[:,:] = self.T[itime,:,:]
+                the = self.inletMean.addTmean(the)
+
                 with open(fname,'w') as f:
                     f.write(dataheader.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
                     f.write('{:d}\n(\n'.format(NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
-                            f.write('{s:f}\n'.format(s=self.Tinlet[kidx[k]]))
+                            f.write('{s:f}\n'.format(s=the[jidx[j],kidx[k]]))
                     f.write(')\n')
 
             # - write out k
@@ -467,7 +535,7 @@ class InflowPlane(object):
                     f.write('{:d}\n(\n'.format(NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
-                            f.write('{s:f}\n'.format(s=self.kinlet[kidx[k]]))
+                            f.write('{s:f}\n'.format(s=self.inletMean.kinlet[kidx[k]]))
                     f.write(')\n')
 
         # end of time-step loop
@@ -483,7 +551,7 @@ class InflowPlane(object):
         """Write out binary VTK file with a single vector field for a
         specified time index or output time.
         """
-        if not self.meanFlowSet: self.applyMeanProfiles()
+        if not self.inletMean.meanFlowSet: self.inletMean.setup()
 
         if output_time:
             itime = int(output_time / self.dt)
@@ -514,12 +582,12 @@ class InflowPlane(object):
         V = vp.copy()
         W = wp.copy()
         for iz in range(self.NZ):
-            U[0,:,iz] += self.Uinlet[iz,0]
-            V[0,:,iz] += self.Uinlet[iz,1]
-            W[0,:,iz] += self.Uinlet[iz,2]
+            U[0,:,iz] += self.inletMean.Uinlet[0,:,iz]
+            V[0,:,iz] += self.inletMean.Uinlet[1,:,iz]
+            W[0,:,iz] += self.inletMean.Uinlet[2,:,iz]
 
         # write out VTK
-        VTKwriter.vtk_write_structured_points( open(fname,'wb'), #binary mode
+        vtk_write_structured_points( open(fname,'wb'), #binary mode
             1, self.NY, self.NZ,
             [ U,V,W, up,vp,wp ],
             datatype=['vector','vector'],
@@ -585,7 +653,7 @@ class InflowPlane(object):
                 wp[:,:,iz] *= self.scaling[2,iz]
 
         # write out VTK
-        VTKwriter.vtk_write_structured_points( open(fname,'wb'), #binary mode
+        vtk_write_structured_points( open(fname,'wb'), #binary mode
             Nt, self.NY, self.NZ,
             [ up,vp,wp ],
             datatype=['vector'],
@@ -599,7 +667,7 @@ class InflowPlane(object):
         """Write out binary VTK file with a single vector field at a
         specified vertical index.
         """
-        if not self.meanFlowSet: self.applyMeanProfiles()
+        if not self.inletMean.meanFlowSet: self.inletMean.setup()
 
         print 'Writing out VTK slice',idx,'at y=',self.y[idx],'to',fname
 
@@ -621,12 +689,12 @@ class InflowPlane(object):
         V = vp.copy()
         W = wp.copy()
         for iz in range(self.NZ):
-            U[:,0,iz] += self.Uinlet[iz,0]
-            V[:,0,iz] += self.Uinlet[iz,1]
-            W[:,0,iz] += self.Uinlet[iz,2]
+            U[:,0,iz] += self.inletMean.Uinlet[0,idx,iz]
+            V[:,0,iz] += self.inletMean.Uinlet[1,idx,iz]
+            W[:,0,iz] += self.inletMean.Uinlet[2,idx,iz]
 
         # write out VTK
-        VTKwriter.vtk_write_structured_points( open(fname,'wb'), #binary mode
+        vtk_write_structured_points( open(fname,'wb'), #binary mode
             self.N, 1, self.NZ,
             [ U,V,W, up,vp,wp ],
             datatype=['vector','vector'],
@@ -640,7 +708,7 @@ class InflowPlane(object):
         """Write out binary VTK file with a single vector field at a
         specified vertical index.
         """
-        if not self.meanFlowSet: self.applyMeanProfiles()
+        if not self.inletMean.meanFlowSet: self.inletMean.setup()
 
         print 'Writing out VTK slice',idx,'at z=',self.z[idx],'to',fname
 
@@ -660,12 +728,13 @@ class InflowPlane(object):
         U = up.copy()
         V = vp.copy()
         W = wp.copy()
-        U[:,:,0] += self.Uinlet[idx,0]
-        V[:,:,0] += self.Uinlet[idx,1]
-        W[:,:,0] += self.Uinlet[idx,2]
+        for iy in range(self.NY):
+            U[:,iy,0] += self.inletMean.Uinlet[0,iy,idx]
+            V[:,iy,0] += self.inletMean.Uinlet[1,iy,idx]
+            W[:,iy,0] += self.inletMean.Uinlet[2,iy,idx]
 
         # write out VTK
-        VTKwriter.vtk_write_structured_points( open(fname,'wb'), #binary mode
+        vtk_write_structured_points( open(fname,'wb'), #binary mode
             self.N, self.NY, 1,
             [ U,V,W, up,vp,wp ],
             datatype=['vector','vector'],
@@ -676,9 +745,10 @@ class InflowPlane(object):
 
 
 
-    """
-    Define aliases here
-    """
+    #===========================================================================
+    #
+    # Define aliases here
+    #
     writeVTKBlock = writeVTKSeriesAsBlock
 
     def writeVTK_xslice(self, fname, idx=0, scaled=True):

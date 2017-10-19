@@ -6,62 +6,108 @@
 #
 # Written by Eliot Quon (eliot.quon.nrel.gov) - 2017-10-17
 #
+import numpy as np
 
-class plane(object):
+class InletPlane(object):
     """A general 2-D representation fo the mean flow, i.e., U(y,z) for flow in x
     """
 
-    def __init__(self):
+    def __init__(self,y,z):
+        """Initialize a mean inflow plane with dimensions of len(y) and len(z)
+        """
+        self.y = y
+        self.z = z
+        self.NY = len(y)
+        self.NZ = len(z)
+
         self.z_profile = None
         self.U_profile = None
         self.V_profile = None
         self.W_profile = None
         self.T_profile = None
+
+        self.uu_profile = None
+        self.vv_profile = None
+        self.ww_profile = None
+
+        # flow input flags
         self.haveMeanFlow = False # True after setMeanProfiles(), readMeanProfile(), or readAllProfiles() is called
-        self.haveVariances = False # True  after readVarianceProfile is called
+        self.haveVariances = False # True after readVarianceProfile() is called
+
+        # inlet setup flags
+        self.meanFlowSet = False # True after setup() is called
+        self.tkeProfileSet = False # True after setTkeProfile() is called (not used)
 
     def setMeanProfiles(self, z,
-            U, V, T,
+            U=None, V=None, W=None, T=None,
             uu=None,vv=None,ww=None):
         """Sets the mean velocity and temperature profiles (and,
         optionally, the variance profiles as well) from user-specified
         np.ndarrays.
 
-        Calls applyInterpolatedMeanProfile() to set up interpolation
+        Calls setupInterpolated() to set up interpolation
         functions.
         """
         self.z_profile = np.array(z)
-        self.U_profile = np.array(U)
-        self.V_profile = np.array(V)
-        self.T_profile = np.array(T)
-        if uu is None:
-            self.uu_profile = np.zeros(len(z))
+        Nz = len(z)
+        if U is None:
+            self.U_profile = np.zeros(Nz)
         else:
+            assert(len(U) == Nz)
+            self.U_profile = np.array(U)
+        if V is None:
+            self.V_profile = np.zeros(Nz)
+        else:
+            assert(len(V) == Nz)
+            self.V_profile = np.array(V)
+        if W is None:
+            self.W_profile = np.zeros(Nz)
+        else:
+            assert(len(W) == Nz)
+            self.W_profile = np.array(W)
+        if T is None:
+            self.T_profile = np.zeros(Nz)
+        else:
+            assert(len(T) == Nz)
+            self.T_profile = np.array(T)
+        if uu is None:
+            self.uu_profile = np.zeros(Nz)
+        else:
+            assert(len(uu) == Nz)
             self.uu_profile = np.array(uu)
         if vv is None:
-            self.vv_profile = np.zeros(len(z))
+            self.vv_profile = np.zeros(Nz)
         else:
+            assert(len(vv) == Nz)
             self.vv_profile = np.array(vv)
         if ww is None:
-            self.ww_profile = np.zeros(len(z))
+            self.ww_profile = np.zeros(Nz)
         else:
+            assert(len(ww) == Nz)
             self.ww_profile = np.array(ww)
-        meanNZ = len(z)
-        assert(len(U_profile) == meanNZ)
-        assert(len(V_profile) == meanNZ)
-        assert(len(T_profile) == meanNZ)
-        assert(len(uu_profile) == meanNZ)
-        assert(len(vv_profile) == meanNZ)
-        assert(len(ww_profile) == meanNZ)
 
         self.meanFlowRead = True
+        self.variancesRead = True
 
-        if self.haveField:
-            self.applyInterpolatedMeanProfile()
-        else:
-            print 'Note: Interpolated mean profile has not been set up since'
-            print '      inflow data have not been read.'
+        self.setupInterpolated()
 
+
+    def setTkeProfile(self,k_profile=lambda z:0.0):
+        """Sets the mean TKE profiles, used for output from writeMappedBC.
+        Note: This is required by the timeVaryingMappedFixedValue BC, but
+        isn't actually used by windPlantSolver.*
+
+        Can also be directly called with a user-specified analytical profile.
+        """
+        self.kinlet = np.zeros(self.NZ)
+        for iz,z in enumerate(self.z):
+            self.kinlet[iz] = k_profile(z)
+
+        #print 'Set TKE profile:  z  k'
+        #for iz,k in enumerate(self.kinlet):
+        #    print self.z[iz],k
+
+        self.tkeProfileSet = True
 
 
     def readAllProfiles(self,fname='averagingProfiles.csv',delim=','):
@@ -70,13 +116,14 @@ class plane(object):
             0  1  2  3  4   5  6  7  8  9 10   11  12  13  14  15  16
             z, U, V, W, T, uu,vv,ww,uv,uw,vw, R11,R22,R33,R12,R13,R23
 
-        Calls applyInterpolatedMeanProfile() to set up interpolation
+        Calls setupInterpolated() to set up interpolation
         functions.
         """
         data = np.loadtxt(fname,delimiter=delim)
         self.z_profile = np.array(data[:,0])
         self.U_profile = np.array(data[:,1])
         self.V_profile = np.array(data[:,2])
+        self.W_profile = np.array(data[:,3])
         self.T_profile = np.array(data[:,4])
         self.uu_profile = np.array(data[:,5])
         self.vv_profile = np.array(data[:,6])
@@ -85,45 +132,52 @@ class plane(object):
         self.meanFlowRead = True
         self.variancesRead = True
 
-        if self.haveField:
-            self.applyInterpolatedMeanProfile()
-        else:
-            print 'Note: Interpolated mean profile has not been set up since'
-            print '      inflow data have not been read.'
+        self.setupInterpolated()
 
 
     def readMeanProfile(self,
             Ufile='U.dat',
-            Vfile='V.dat',
-            Tfile='T.dat',
+            Vfile=None,
+            Wfile=None,
+            Tfile=None,
             delim=None):
         """Read planar averages (postprocessed separately) from
         individual files.  These are saved into arrays for interpolation
         assuming that the heights in all files are the same.
 
-        Calls applyInterpolatedMeanProfile() to set up interpolation
+        Calls setupInterpolated() to set up interpolation
         functions.
         """
         Udata = np.loadtxt(Ufile,delimiter=delim)
         hmean = Udata[:,0]
         Umean = Udata[:,1]
-        Vmean = np.loadtxt(Vfile,delimiter=delim)[:,1]
-        Tmean = np.loadtxt(Tfile,delimiter=delim)[:,1]
+        if Vfile is not None:
+            Vmean = np.loadtxt(Vfile,delimiter=delim)[:,1]
+        else:
+            Vmean = np.zeros(len(hmean))
+        if Wfile is not None:
+            Wmean = np.loadtxt(Wfile,delimiter=delim)[:,1]
+        else:
+            Wmean = np.zeros(len(hmean))
+        if Tfile is not None:
+            Tmean = np.loadtxt(Tfile,delimiter=delim)[:,1]
+        else:
+            Tmean = np.zeros(len(hmean))
+
         assert( len(hmean)==len(Umean)
             and len(Umean)==len(Vmean)
-            and len(Vmean)==len(Tmean) )
+            and len(Vmean)==len(Wmean)
+            and len(Wmean)==len(Tmean) )
+
         self.z_profile = np.array(hmean)
         self.U_profile = np.array(Umean)
         self.V_profile = np.array(Vmean)
+        self.W_profile = np.array(Wmean)
         self.T_profile = np.array(Tmean)
 
         self.meanFlowRead = True
 
-        if self.haveField:
-            self.applyInterpolatedMeanProfile()
-        else:
-            print 'Note: Interpolated mean profile has not been set up since'
-            print '      inflow data have not been read.'
+        self.setupInterpolated()
 
 
     def readVarianceProfile(self,
@@ -140,6 +194,7 @@ class plane(object):
         uumean = uudata[:,1]
         vvmean = np.loadtxt(vvfile,delimiter=delim)[:,1]
         wwmean = np.loadtxt(wwfile,delimiter=delim)[:,1]
+
         assert( len(hmean)==len(uumean)
             and len(uumean)==len(vvmean)
             and len(vvmean)==len(wwmean) )
@@ -161,9 +216,10 @@ class plane(object):
         self.variancesRead = True
 
 
-    def applyMeanProfiles(self,
-            Uprofile=lambda z:[0.0,0.0,0.0],
-            Tprofile=lambda z:0.0
+    #def applyMeanProfiles(self,
+    def setup(self,
+            Uprofile=lambda z: [0.0,0.0,0.0],
+            Tprofile=lambda z: 0.0
         ):
         """Sets the mean velocity and temperature profiles (which
         affects output from writeMappedBC and writeVTK).  Called by
@@ -175,24 +231,76 @@ class plane(object):
         if self.meanFlowSet:
             print 'Note: Mean profiles have already been set and will be overwritten'
 
-        self.Uinlet = np.zeros((self.NZ,3))
-        self.Tinlet = np.zeros(self.NZ)
+        self.Uinlet = np.zeros((3,self.NY,self.NZ))
+        self.Tinlet = np.zeros((self.NY,self.NZ))
         for iz,z in enumerate(self.z):
-            self.Uinlet[iz,:] = Uprofile(z)
-            self.Tinlet[iz]   = Tprofile(z)
+            for iy,y in enumerate(self.y):
+                self.Uinlet[:,iy,iz] = Uprofile(z)
+                self.Tinlet[iy,iz]   = Tprofile(z)
 
-        if self.verbose:
-            print 'Specified mean profile:  z  U  T'
-            for iz,U in enumerate(self.Uinlet):
-                print self.z[iz],U,self.Tinlet[iz]
+       #if self.verbose:
+       #    print 'Specified mean profile:  z  U  T'
+       #    for iz,z in enumerate(self.z):
+       #        print self.z[iz], self.Uinlet[:,0,iz], self.Tinlet[0,iz]
 
         self.meanFlowSet = True
 
 
-class profile(plane):
-    """A 1-D representation of the mean flow, i.e., U(z) for flow in x
-    This is based on the general 2-D inflow plane.
-    """
-    def __init__(self):
-        super(self.__class__,self).__init__(*args,**kwargs)
+    #def applyInterpolatedMeanProfile(self):
+    def setupInterpolated(self):
+        """Helper routine to calculate interpolation functions after
+        mean profiles have been input.
+
+        Sets Ufn, Vfn, and Tfn that can be called at an arbitrary
+        height.
+        """
+        from scipy import interpolate
+
+        self.Ufn = interpolate.interp1d(self.z_profile, self.U_profile,
+                kind='linear',fill_value='extrapolate') 
+
+        if self.V_profile is not None:
+            self.Vfn = interpolate.interp1d(self.z_profile, self.V_profile,
+                    kind='linear',fill_value='extrapolate') 
+        else:
+            self.Vfn = lambda z: 0.0
+
+        if self.W_profile is not None:
+            self.Wfn = interpolate.interp1d(self.z_profile, self.W_profile,
+                    kind='linear',fill_value='extrapolate') 
+        else:
+            self.Wfn = lambda z: 0.0
+
+        if self.T_profile is not None:
+            self.Tfn = interpolate.interp1d(self.z_profile, self.T_profile,
+                    kind='linear',fill_value='extrapolate')
+        else:
+            self.Tfn = lambda z: 0.0
+
+        self.setup(
+            Uprofile=lambda z: [self.Ufn(z),self.Vfn(z),self.Wfn(z)],
+            Tprofile=lambda z: self.Tfn(z)
+        )
+
+
+    def addUmean(self,u):
+        #for k in range(self.NZ):
+        #    for j in range(self.NY):
+        #        u[:,j,k] += self.Uinlet[:,j,k]
+        return self.Uinlet + u
+
+
+    def addTmean(self,the):
+        #for k in range(self.NZ):
+        #    for j in range(self.NY):
+        #        the[j,k] += self.Tinlet[j,k]
+        return self.Tinlet + the
+
+
+#class profile(plane):
+#    """A 1-D representation of the mean flow, i.e., U(z) for flow in x
+#    This is based on the general 2-D inflow plane.
+#    """
+#    def __init__(self):
+#        super(self.__class__,self).__init__(*args,**kwargs)
 
