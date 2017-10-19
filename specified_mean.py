@@ -8,18 +8,40 @@
 #
 import numpy as np
 
+import datatools.SOWFA.timeVaryingMappedBC as bc
+
 class InletPlane(object):
     """A general 2-D representation fo the mean flow, i.e., U(y,z) for flow in x
     """
 
-    def __init__(self,y,z):
+    def __init__(self,y,z,sourceDir=None):
         """Initialize a mean inflow plane with dimensions of len(y) and len(z)
         """
-        self.y = y
-        self.z = z
+        self.y = y # these are the dimensions from the synthetic simulation
+        self.z = z # these are the dimensions from the synthetic simulation
         self.NY = len(y)
         self.NZ = len(z)
 
+        self.inflowIs2D = False
+        self.inflowSourceDir = None
+        if sourceDir is not None:
+            # Inflow format is assumed to be OpenFOAM's timeVaryingMapped BC;
+            # a 'points' file will be read
+            self.inflowSourceDir = sourceDir
+            y,z = bc.readBoundaryPoints(os.path.join(sourceDir,'points'))
+            self.y_inlet = y
+            self.z_inlet = z
+            if not np.all(self.y == self.y_inlet):
+                print 'Note: Mean inflow plane initialized with mismatched boundary points in y'
+                print '  fluctuations y-grid:',self.y
+                print '     mean flow y-grid:',self.y_inlet
+            if not np.all(self.z == self.z_inlet):
+                print 'Note: Mean inflow plane initialized with mismatched boundary points in z'
+                print '  fluctuations z-grid:',self.z
+                print '     mean flow z-grid:',self.z_inlet
+            self.inflowIs2D = True
+
+        # 1D mean flow data
         self.z_profile = None
         self.U_profile = None
         self.V_profile = None
@@ -37,6 +59,7 @@ class InletPlane(object):
         # inlet setup flags
         self.meanFlowSet = False # True after setup() is called
         self.tkeProfileSet = False # True after setTkeProfile() is called (not used)
+
 
     def setMeanProfiles(self, z,
             U=None, V=None, W=None, T=None,
@@ -216,10 +239,25 @@ class InletPlane(object):
         self.variancesRead = True
 
 
+    def readMeanPlane(self,timeName,readU=True,readT=True):
+        """Reads the mean inflow on a plane from data in OpenFOAM's
+        timeVaryingMapped boundary condition format. 
+        """
+        assert(self.inflowSourceDir is not None)
+
+        if readU:
+            fname = os.path.join(self.inflowSourceDir,timeName,'U')
+
+        if readT:
+            fname = os.path.join(self.inflowSourceDir,timeName,'T')
+
+        self.meanFlowRead = True
+
+
     #def applyMeanProfiles(self,
     def setup(self,
-            Uprofile=lambda z: [0.0,0.0,0.0],
-            Tprofile=lambda z: 0.0
+            Uprofile=None, #lambda z: [0.0,0.0,0.0],
+            Tprofile=None #lambda z: 0.0
         ):
         """Sets the mean velocity and temperature profiles (which
         affects output from writeMappedBC and writeVTK).  Called by
@@ -233,10 +271,28 @@ class InletPlane(object):
 
         self.Uinlet = np.zeros((3,self.NY,self.NZ))
         self.Tinlet = np.zeros((self.NY,self.NZ))
-        for iz,z in enumerate(self.z):
-            for iy,y in enumerate(self.y):
-                self.Uinlet[:,iy,iz] = Uprofile(z)
-                self.Tinlet[iy,iz]   = Tprofile(z)
+
+        if Uprofile is not None:
+            if self.inflowIs2D:
+                for iz,z in enumerate(self.z):
+                    for iy,y in enumerate(self.y):
+                        self.Uinlet[:,iy,iz] = Uprofile(y,z)
+            else:
+                for iz,z in enumerate(self.z):
+                    Uz = Uprofile(z)
+                    for iy,y in enumerate(self.y):
+                        self.Uinlet[:,iy,iz] = Uz
+
+        if Tprofile is not None:
+            if self.inflowIs2D:
+                for iz,z in enumerate(self.z):
+                    for iy,y in enumerate(self.y):
+                        self.Tinlet[iy,iz]   = Tprofile(y,z)
+            else:
+                for iz,z in enumerate(self.z):
+                    Tz = Tprofile(z)
+                    for iy,y in enumerate(self.y):
+                        self.Tinlet[iy,iz]   = Tz
 
        #if self.verbose:
        #    print 'Specified mean profile:  z  U  T'
@@ -251,7 +307,7 @@ class InletPlane(object):
         """Helper routine to calculate interpolation functions after
         mean profiles have been input.
 
-        Sets Ufn, Vfn, and Tfn that can be called at an arbitrary
+        Sets Ufn, Vfn, Wfn, and Tfn that can be called at an arbitrary
         height.
         """
         from scipy import interpolate
@@ -280,6 +336,42 @@ class InletPlane(object):
         self.setup(
             Uprofile=lambda z: [self.Ufn(z),self.Vfn(z),self.Wfn(z)],
             Tprofile=lambda z: self.Tfn(z)
+        )
+
+
+    def setupInterpolated2D(self):
+        """Helper routine to calculate interpolation functions after
+        mean inflow planes have been read.
+
+        Sets Ufn, Vfn, and Tfn that can be called at an arbitrary
+        height.
+        """
+        from scipy import interpolate
+
+        self.Ufn = interpolate.interp1d(self.z_profile, self.U_profile,
+                kind='linear',fill_value='extrapolate') 
+
+        if self.V_profile is not None:
+            self.Vfn = interpolate.interp1d(self.z_profile, self.V_profile,
+                    kind='linear',fill_value='extrapolate') 
+        else:
+            self.Vfn = lambda z: 0.0
+
+        if self.W_profile is not None:
+            self.Wfn = interpolate.interp1d(self.z_profile, self.W_profile,
+                    kind='linear',fill_value='extrapolate') 
+        else:
+            self.Wfn = lambda z: 0.0
+
+        if self.T_profile is not None:
+            self.Tfn = interpolate.interp1d(self.z_profile, self.T_profile,
+                    kind='linear',fill_value='extrapolate')
+        else:
+            self.Tfn = lambda z: 0.0
+
+        self.setup(
+            Uprofile=lambda y,z: [self.Ufn(y,z),self.Vfn(y,z),self.Wfn(y,z)],
+            Tprofile=lambda y,z: self.Tfn(y,z)
         )
 
 

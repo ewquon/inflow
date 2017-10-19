@@ -37,6 +37,10 @@ class InflowPlane(object):
         self.inletMean = None # a specified_mean object, which may be a profile or (time-varying) inflow plane
         self.haveField = False # True after the velocity field has been read
 
+        self.inflowSourceDir = None
+        self.pointsFile = None
+        self.needUpdateMean = False # Set to true update the mean inflow at every time step. 
+
         # set by calculateRMS
         self.uu_mean = None
         self.vv_mean = None
@@ -269,7 +273,7 @@ class InflowPlane(object):
 
     #===========================================================================
     #
-    # Mean flow set up
+    # 1D mean flow set up
     #
     #===========================================================================
 
@@ -390,6 +394,31 @@ class InflowPlane(object):
                 for iz,z in enumerate(self.z):
                     f.write(' {:f} {f[0]:g} {f[1]:g} {f[2]:g}\n'.format(z,f=self.scaling[:,iz]))
             print 'Wrote scaling function to',output
+
+
+    #===========================================================================
+    #
+    # 2D mean flow set up
+    #
+    #===========================================================================
+
+    def setInflowSourceDirectory(self,dpath):
+        """This sets inflowSourceDir (after checking if a 'points' file exists)
+        which will be passed to specified_mean. Specification of a source dir
+        will set the 2D inflow flag.
+        """
+        pointsFile = os.path.join(dpath,'points')
+        if os.path.isfile(pointsFile):
+            self.inletMean = specified_mean.InletPlane(self.y,self.z,dpath)
+        else:
+            print 'Error:',pointsFile,'does not exist!'
+
+    def setTimeSeries(self,tstart=0.0,times=[],timeNames=[])
+        assert(len(times) == len(timeNames))
+        self.needUpdateMean = True
+
+    def readInflowFromBC(self,itime,*args,**kwargs):
+        self.inletMean.readMeanPlane(timeName,*args,**kwargs)
 
 
     #===========================================================================
