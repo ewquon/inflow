@@ -39,7 +39,10 @@ class InflowPlane(object):
 
         self.inflowSourceDir = None
         self.pointsFile = None
-        self.needUpdateMean = False # Set to true update the mean inflow at every time step. 
+        self.needUpdateMean = False # set to true update the mean inflow at every time step. 
+        self.timeseries = None # used if needUpdateMean is True
+        self.Useries = None # used if needUpdateMean is True
+        self.Tseries = None # used if needUpdateMean is True
 
         # set by calculateRMS
         self.uu_mean = None
@@ -59,7 +62,7 @@ class InflowPlane(object):
         print 'No inflow data were read.'
 
 
-    def createEmptyField(self, Ly, Lz, Ny, Nz):
+    def createEmptyField(self, Ly, Lz, Ny, Nz, times=[0,1000.0,2000.0]):
         """Create field with no fluctuations, for development and
         testing (e.g., to create a smooth inflow)
         """
@@ -67,7 +70,7 @@ class InflowPlane(object):
         self.NY = Ny
         self.NZ = Nz
 
-        self.t = [0, 1000.0, 2000.0]
+        self.t = times
         self.y = np.linspace(0, Ly, Ny)
         self.z = np.linspace(0, Lz, Nz)
 
@@ -402,23 +405,38 @@ class InflowPlane(object):
     #
     #===========================================================================
 
-    def setInflowSourceDirectory(self,dpath):
+    def setInflowSourceDirectory(self,dpath,tstart=None):
         """This sets inflowSourceDir (after checking if a 'points' file exists)
         which will be passed to specified_mean. Specification of a source dir
         will set the 2D inflow flag.
+
+        If tstart is not specified, then the starting time corresponding to t=0
+        in the time series of the fluctuations, will be assumed to be the first
+        time directory in the source directory. 
         """
         pointsFile = os.path.join(dpath,'points')
         if os.path.isfile(pointsFile):
-            self.inletMean = specified_mean.InletPlane(self.y,self.z,dpath)
+            self.inletMean = specified_mean.InletPlane(self.y,self.z,dpath,tstart)
         else:
             print 'Error:',pointsFile,'does not exist!'
-
-    def setTimeSeries(self,tstart=0.0,times=[],timeNames=[])
-        assert(len(times) == len(timeNames))
         self.needUpdateMean = True
 
-    def readInflowFromBC(self,itime,*args,**kwargs):
-        self.inletMean.readMeanPlane(timeName,*args,**kwargs)
+    def readInflowFromBC(self,itime=None,*args,**kwargs):
+        """Reads inflow at time index itime from Useries and Tseries (setup after
+        a specified_mean object is initialized from setupInflowSourceDirectory).
+
+        U_planar, V_planar, W_planar, and T_planar are updated using the
+        datatools/SOWFA/timeVaryingMappedBC module. These data are interpolated to
+        Uinlet and Tinlet at y and z.
+
+        If a time index, itime, is not specified then all inflow planes are read
+        simultaneously and interpolation is performed to get Uinlet and Tinlet at
+        a particular time.
+        """
+        if itime is not None:
+            self.inletMean.readMeanPlane(itime,*args,**kwargs)
+        else:
+            self.inletMean.readAllMeanPlanes(*args,**kwargs)
 
 
     #===========================================================================
@@ -451,13 +469,15 @@ class InflowPlane(object):
             print 'Creating output dir :',outputdir
             os.makedirs(outputdir)
 
-        if not self.inletMean.meanFlowSet:
+        if (self.inletMean is not None) and not self.inletMean.meanFlowSet:
             print 'Note: Mean profiles have not been set or read from files'
             self.inletMean.setup() # set up inlet profile functions
-        if writek and not self.inletMean.meanFlowSet:
+        if writek and not self.inletMean.tkeProfileSet:
             print 'Note: Mean TKE profile has not been set'
             self.setTkeProfile()
 
+        # figure out indexing in the case that the LES mesh has some (integer)
+        #   refinement factor
         if LESyfac >= 1 and LESzfac >= 1:
             NY = int( LESyfac*(self.NY-1) ) + 1
             NZ = int( LESzfac*(self.NZ-1) ) + 1
@@ -508,10 +528,13 @@ class InflowPlane(object):
 
         # begin time-step loop
         for i in range(istart,iend,interval):
-            itime = np.mod(i-istart,self.N)
+            itime = np.mod(i-istart,self.N) # enable looping
             tname = '{:f}'.format(self.realtype(i*self.dt)).rstrip('0').rstrip('.')
             try: os.mkdir(outputdir+os.sep+tname)
             except: pass
+
+            if self.inletMean.interpTime:
+                self.inletMean.setupForTime(i*self.dt) # update Uinlet, Tinlet
 
             prefix = outputdir + os.sep + tname + os.sep
             if stdout=='overwrite':
@@ -580,18 +603,22 @@ class InflowPlane(object):
         """Write out binary VTK file with a single vector field for a
         specified time index or output time.
         """
-        if not self.inletMean.meanFlowSet: self.inletMean.setup()
+        if (self.inletMean is not None) and not self.inletMean.meanFlowSet:
+            self.inletMean.setup()
 
         if output_time:
             itime = int(output_time / self.dt)
         if itime is None:
             print 'Need to specify itime or output_time'
             return
-	if stdout=='overwrite':
+        if stdout=='overwrite':
             sys.stdout.write('\rWriting time step {:d} :  t= {:f}'.format(
                 itime,self.t[itime]))
-	else: #if stdout=='verbose':
+        else: #if stdout=='verbose':
             print 'Writing out VTK for time step',itime,': t=',self.t[itime]
+		
+        if self.inletMean.interpTime:
+            self.inletMean.setupForTime(self.t[itime]) # update Uinlet, Tinlet
 
         # scale fluctuations
         up = np.zeros((1,self.NY,self.NZ))
@@ -610,10 +637,11 @@ class InflowPlane(object):
         U = up.copy()
         V = vp.copy()
         W = wp.copy()
-        for iz in range(self.NZ):
-            U[0,:,iz] += self.inletMean.Uinlet[0,:,iz]
-            V[0,:,iz] += self.inletMean.Uinlet[1,:,iz]
-            W[0,:,iz] += self.inletMean.Uinlet[2,:,iz]
+        if self.inletMean is not None:
+            for iz in range(self.NZ):
+                U[0,:,iz] += self.inletMean.Uinlet[0,:,iz]
+                V[0,:,iz] += self.inletMean.Uinlet[1,:,iz]
+                W[0,:,iz] += self.inletMean.Uinlet[2,:,iz]
 
         # write out VTK
         vtk_write_structured_points( open(fname,'wb'), #binary mode
@@ -696,7 +724,8 @@ class InflowPlane(object):
         """Write out binary VTK file with a single vector field at a
         specified vertical index.
         """
-        if not self.inletMean.meanFlowSet: self.inletMean.setup()
+        if (self.inletMean is not None) and not self.inletMean.meanFlowSet:
+            self.inletMean.setup()
 
         print 'Writing out VTK slice',idx,'at y=',self.y[idx],'to',fname
 
@@ -717,10 +746,11 @@ class InflowPlane(object):
         U = up.copy()
         V = vp.copy()
         W = wp.copy()
-        for iz in range(self.NZ):
-            U[:,0,iz] += self.inletMean.Uinlet[0,idx,iz]
-            V[:,0,iz] += self.inletMean.Uinlet[1,idx,iz]
-            W[:,0,iz] += self.inletMean.Uinlet[2,idx,iz]
+        if self.inletMean is not None:
+            for iz in range(self.NZ):
+                U[:,0,iz] += self.inletMean.Uinlet[0,idx,iz]
+                V[:,0,iz] += self.inletMean.Uinlet[1,idx,iz]
+                W[:,0,iz] += self.inletMean.Uinlet[2,idx,iz]
 
         # write out VTK
         vtk_write_structured_points( open(fname,'wb'), #binary mode
@@ -737,7 +767,8 @@ class InflowPlane(object):
         """Write out binary VTK file with a single vector field at a
         specified vertical index.
         """
-        if not self.inletMean.meanFlowSet: self.inletMean.setup()
+        if (self.inletMean is not None) and not self.inletMean.meanFlowSet:
+            self.inletMean.setup()
 
         print 'Writing out VTK slice',idx,'at z=',self.z[idx],'to',fname
 
@@ -757,10 +788,11 @@ class InflowPlane(object):
         U = up.copy()
         V = vp.copy()
         W = wp.copy()
-        for iy in range(self.NY):
-            U[:,iy,0] += self.inletMean.Uinlet[0,iy,idx]
-            V[:,iy,0] += self.inletMean.Uinlet[1,iy,idx]
-            W[:,iy,0] += self.inletMean.Uinlet[2,iy,idx]
+        if self.inletMean is not None:
+            for iy in range(self.NY):
+                U[:,iy,0] += self.inletMean.Uinlet[0,iy,idx]
+                V[:,iy,0] += self.inletMean.Uinlet[1,iy,idx]
+                W[:,iy,0] += self.inletMean.Uinlet[2,iy,idx]
 
         # write out VTK
         vtk_write_structured_points( open(fname,'wb'), #binary mode

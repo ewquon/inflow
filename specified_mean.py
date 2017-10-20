@@ -6,42 +6,27 @@
 #
 # Written by Eliot Quon (eliot.quon.nrel.gov) - 2017-10-17
 #
+import os
+
 import numpy as np
 
+from datatools.timeseries import TimeSeries
 import datatools.SOWFA.timeVaryingMappedBC as bc
 
 class InletPlane(object):
     """A general 2-D representation fo the mean flow, i.e., U(y,z) for flow in x
     """
 
-    def __init__(self,y,z,sourceDir=None):
+    def __init__(self,y=[0],z=[0],sourceDir=None,tstart=None):
         """Initialize a mean inflow plane with dimensions of len(y) and len(z)
         """
         self.y = y # these are the dimensions from the synthetic simulation
         self.z = z # these are the dimensions from the synthetic simulation
         self.NY = len(y)
         self.NZ = len(z)
+        self.tstart = tstart
 
-        self.inflowIs2D = False
-        self.inflowSourceDir = None
-        if sourceDir is not None:
-            # Inflow format is assumed to be OpenFOAM's timeVaryingMapped BC;
-            # a 'points' file will be read
-            self.inflowSourceDir = sourceDir
-            y,z = bc.readBoundaryPoints(os.path.join(sourceDir,'points'))
-            self.y_inlet = y
-            self.z_inlet = z
-            if not np.all(self.y == self.y_inlet):
-                print 'Note: Mean inflow plane initialized with mismatched boundary points in y'
-                print '  fluctuations y-grid:',self.y
-                print '     mean flow y-grid:',self.y_inlet
-            if not np.all(self.z == self.z_inlet):
-                print 'Note: Mean inflow plane initialized with mismatched boundary points in z'
-                print '  fluctuations z-grid:',self.z
-                print '     mean flow z-grid:',self.z_inlet
-            self.inflowIs2D = True
-
-        # 1D mean flow data
+        # mean profile
         self.z_profile = None
         self.U_profile = None
         self.V_profile = None
@@ -52,9 +37,51 @@ class InletPlane(object):
         self.vv_profile = None
         self.ww_profile = None
 
+        # mean inflow plane
+        self.y_planar = None # 1D array
+        self.z_planar = None # 1D array
+        self.U_planar = None
+        self.V_planar = None
+        self.W_planar = None
+        self.T_planar = None
+
+        self.inflowIs2D = False
+        self.inflowSourceDir = None
+        if sourceDir is not None:
+            # Inflow format is assumed to be OpenFOAM's timeVaryingMapped BC;
+            # a 'points' file will be read
+            self.inflowSourceDir = sourceDir
+            y,z = bc.readBoundaryPoints(os.path.join(sourceDir,'points'))
+            self.y_planar = y
+            self.z_planar = z
+            if not np.all(self.y == self.y_planar):
+                print 'Note: Mean inflow plane initialized with mismatched boundary points in y'
+                print '  fluctuations y-grid:',self.y
+                print '     mean flow y-grid:',self.y_planar
+            if not np.all(self.z == self.z_planar):
+                print 'Note: Mean inflow plane initialized with mismatched boundary points in z'
+                print '  fluctuations z-grid:',self.z
+                print '     mean flow z-grid:',self.z_planar
+            self.inflowIs2D = True
+
+            self.Useries = TimeSeries(sourceDir,filename='U')
+            self.Tseries = TimeSeries(sourceDir,filename='T')
+            assert(len(self.Useries) == len(self.Tseries))
+            print 'U inflow series :',self.Useries
+            print 'T inflow series :',self.Tseries
+
+            self.timeseries = np.array(self.Useries.outputTimes)
+            assert(np.all(self.timeseries == self.Tseries.outputTimes))
+            if tstart is None:
+                self.tstart = self.timeseries[0]
+            self.timeseries -= self.tstart
+            print 'inflow times :',self.timeseries,'( started from',self.tstart,')'
+
         # flow input flags
-        self.haveMeanFlow = False # True after setMeanProfiles(), readMeanProfile(), or readAllProfiles() is called
+        self.haveMeanFlow = False # True after setMeanProfiles(), readMeanProfile(), readAllProfiles(), readMeanPlane(), or readAllMeanPlanes()
         self.haveVariances = False # True after readVarianceProfile() is called
+
+        self.interpTime = False # True if readAllMeanPlanes() is called
 
         # inlet setup flags
         self.meanFlowSet = False # True after setup() is called
@@ -238,26 +265,63 @@ class InletPlane(object):
 
         self.variancesRead = True
 
-
-    def readMeanPlane(self,timeName,readU=True,readT=True):
+    def readMeanPlane(self,itime,readU=True,readT=True):
         """Reads the mean inflow on a plane from data in OpenFOAM's
         timeVaryingMapped boundary condition format. 
         """
         assert(self.inflowSourceDir is not None)
 
-        if readU:
-            fname = os.path.join(self.inflowSourceDir,timeName,'U')
+        NY = len(self.y_planar)
+        NZ = len(self.z_planar)
+        self.U_planar = np.zeros((NY,NZ))
+        self.V_planar = np.zeros((NY,NZ))
+        self.W_planar = np.zeros((NY,NZ))
+        self.T_planar = np.zeros((NY,NZ))
 
+        if readU:
+            vdata = bc.readVectorData(self.Useries[itime],NY=NY,NZ=NZ)
+            self.U_planar[:,:] = vdata[0,:,:]
+            self.V_planar[:,:] = vdata[1,:,:]
+            self.W_planar[:,:] = vdata[2,:,:]
         if readT:
-            fname = os.path.join(self.inflowSourceDir,timeName,'T')
+            self.T_planar[:,:] = bc.readScalarData(self.Tseries[itime],NY=NY,NZ=NZ)
+
+        self.setupInterpolated2D()
+
+        self.meanFlowRead = True
+
+    def readAllMeanPlanes(self):
+        """Reads all mean inflow planes from data in OpenFOAM's
+        timeVaryingMapped boundary condition format. 
+        """
+        assert(self.inflowSourceDir is not None)
+
+        Ntimes = len(self.timeseries)
+        NY = len(self.y_planar)
+        NZ = len(self.z_planar)
+        self.U_planar = np.zeros((Ntimes,NY,NZ))
+        self.V_planar = np.zeros((Ntimes,NY,NZ))
+        self.W_planar = np.zeros((Ntimes,NY,NZ))
+        self.T_planar = np.zeros((Ntimes,NY,NZ))
+
+        for itime,ti in enumerate(self.timeseries):
+            print 'Processing mean inflow at t=',ti,':'
+            vdata = bc.readVectorData(self.Useries[itime],NY=NY,NZ=NZ)
+            self.U_planar[itime,:,:] = vdata[0,:,:]
+            self.V_planar[itime,:,:] = vdata[1,:,:]
+            self.W_planar[itime,:,:] = vdata[2,:,:]
+            self.T_planar[itime,:,:] = bc.readScalarData(self.Tseries[itime],NY=NY,NZ=NZ)
+
+        self.interpTime = True
+        self.setupInterpolated3D()
 
         self.meanFlowRead = True
 
 
     #def applyMeanProfiles(self,
     def setup(self,
-            Uprofile=None, #lambda z: [0.0,0.0,0.0],
-            Tprofile=None #lambda z: 0.0
+            Uinput=None, #lambda z: [0.0,0.0,0.0],
+            Tinput=None  #lambda z: 0.0
         ):
         """Sets the mean velocity and temperature profiles (which
         affects output from writeMappedBC and writeVTK).  Called by
@@ -272,25 +336,25 @@ class InletPlane(object):
         self.Uinlet = np.zeros((3,self.NY,self.NZ))
         self.Tinlet = np.zeros((self.NY,self.NZ))
 
-        if Uprofile is not None:
+        if Uinput is not None:
             if self.inflowIs2D:
                 for iz,z in enumerate(self.z):
                     for iy,y in enumerate(self.y):
-                        self.Uinlet[:,iy,iz] = Uprofile(y,z)
+                        self.Uinlet[:,iy,iz] = Uinput(y,z)
             else:
                 for iz,z in enumerate(self.z):
-                    Uz = Uprofile(z)
+                    Uz = Uinput(z)
                     for iy,y in enumerate(self.y):
                         self.Uinlet[:,iy,iz] = Uz
 
-        if Tprofile is not None:
+        if Tinput is not None:
             if self.inflowIs2D:
                 for iz,z in enumerate(self.z):
                     for iy,y in enumerate(self.y):
-                        self.Tinlet[iy,iz]   = Tprofile(y,z)
+                        self.Tinlet[iy,iz]   = Tinput(y,z)
             else:
                 for iz,z in enumerate(self.z):
-                    Tz = Tprofile(z)
+                    Tz = Tinput(z)
                     for iy,y in enumerate(self.y):
                         self.Tinlet[iy,iz]   = Tz
 
@@ -310,32 +374,32 @@ class InletPlane(object):
         Sets Ufn, Vfn, Wfn, and Tfn that can be called at an arbitrary
         height.
         """
-        from scipy import interpolate
+        from scipy.interpolate import interp1d
 
-        self.Ufn = interpolate.interp1d(self.z_profile, self.U_profile,
+        self.Ufn = interp1d(self.z_profile, self.U_profile,
                 kind='linear',fill_value='extrapolate') 
 
         if self.V_profile is not None:
-            self.Vfn = interpolate.interp1d(self.z_profile, self.V_profile,
+            self.Vfn = interp1d(self.z_profile, self.V_profile,
                     kind='linear',fill_value='extrapolate') 
         else:
             self.Vfn = lambda z: 0.0
 
         if self.W_profile is not None:
-            self.Wfn = interpolate.interp1d(self.z_profile, self.W_profile,
+            self.Wfn = interp1d(self.z_profile, self.W_profile,
                     kind='linear',fill_value='extrapolate') 
         else:
             self.Wfn = lambda z: 0.0
 
         if self.T_profile is not None:
-            self.Tfn = interpolate.interp1d(self.z_profile, self.T_profile,
+            self.Tfn = interp1d(self.z_profile, self.T_profile,
                     kind='linear',fill_value='extrapolate')
         else:
             self.Tfn = lambda z: 0.0
 
         self.setup(
-            Uprofile=lambda z: [self.Ufn(z),self.Vfn(z),self.Wfn(z)],
-            Tprofile=lambda z: self.Tfn(z)
+            Uinput=lambda z: [self.Ufn(z),self.Vfn(z),self.Wfn(z)],
+            Tinput=lambda z: self.Tfn(z)
         )
 
 
@@ -346,32 +410,81 @@ class InletPlane(object):
         Sets Ufn, Vfn, and Tfn that can be called at an arbitrary
         height.
         """
-        from scipy import interpolate
+        from scipy.interpolate import interp2d
 
-        self.Ufn = interpolate.interp1d(self.z_profile, self.U_profile,
+        self.Ufn = interp2d(self.y_planar, self.z_planar, self.U_planar,
                 kind='linear',fill_value='extrapolate') 
 
-        if self.V_profile is not None:
-            self.Vfn = interpolate.interp1d(self.z_profile, self.V_profile,
+        if self.V_planar is not None:
+            self.Vfn = interp2d(self.y_planar, self.z_planar, self.V_planar,
                     kind='linear',fill_value='extrapolate') 
         else:
-            self.Vfn = lambda z: 0.0
+            self.Vfn = lambda y,z: 0.0
 
-        if self.W_profile is not None:
-            self.Wfn = interpolate.interp1d(self.z_profile, self.W_profile,
+        if self.W_planar is not None:
+            self.Wfn = interp2d(self.y_planar, self.z_planar, self.W_planar,
                     kind='linear',fill_value='extrapolate') 
         else:
-            self.Wfn = lambda z: 0.0
+            self.Wfn = lambda y,z: 0.0
 
-        if self.T_profile is not None:
-            self.Tfn = interpolate.interp1d(self.z_profile, self.T_profile,
+        if self.T_planar is not None:
+            self.Tfn = interp2d(self.y_planar, self.z_planar, self.T_planar,
                     kind='linear',fill_value='extrapolate')
         else:
-            self.Tfn = lambda z: 0.0
+            self.Tfn = lambda y,z: 0.0
 
         self.setup(
-            Uprofile=lambda y,z: [self.Ufn(y,z),self.Vfn(y,z),self.Wfn(y,z)],
-            Tprofile=lambda y,z: self.Tfn(y,z)
+            Uinput=lambda y,z: [self.Ufn(y,z),self.Vfn(y,z),self.Wfn(y,z)],
+            Tinput=lambda y,z: self.Tfn(y,z)
+        )
+
+
+    def setupInterpolated3D(self):
+        """Helper routine to calculate interpolation functions after
+        mean inflow planes have been read (2D in space + time).
+
+        Sets Ufn, Vfn, and Tfn that can be called at an arbitrary
+        height.
+        """
+        from scipy.interpolate import RegularGridInterpolator #trilinear w/o triangulation
+
+        self.Ufn = RegularGridInterpolator(
+                (self.timeseries, self.y_planar, self.z_planar), self.U_planar,
+                method='linear', fill_value=None) 
+
+        if self.V_planar is not None:
+            self.Vfn = RegularGridInterpolator(
+                    (self.timeseries, self.y_planar, self.z_planar), self.V_planar,
+                    method='linear', fill_value=None) 
+        else:
+            self.Vfn = lambda t,y,z: 0.0
+
+        if self.W_planar is not None:
+            self.Wfn = RegularGridInterpolator(
+                    (self.timeseries, self.y_planar, self.z_planar), self.W_planar,
+                    method='linear', fill_value=None) 
+        else:
+            self.Wfn = lambda t,y,z: 0.0
+
+        if self.T_planar is not None:
+            self.Tfn = RegularGridInterpolator(
+                    (self.timeseries, self.y_planar, self.z_planar), self.T_planar,
+                    method='linear', fill_value=None)
+        else:
+            self.Tfn = lambda t,y,z: 0.0
+
+        self.setupForTime(0)
+
+    def setupForTime(self,t):
+        # Note: RegularGridInterpolator expects input as f([t,y,z]) as opposed
+        #       to f(t,y,z) and returns a list of values as opposed to a single
+        #       scalar.
+        assert(self.interpTime == True)
+        self.setup(
+            Uinput=lambda y,z: [self.Ufn([t,y,z])[0],
+                                self.Vfn([t,y,z])[0],
+                                self.Wfn([t,y,z])[0]],
+            Tinput=lambda y,z: self.Tfn([t,y,z])[0]
         )
 
 
