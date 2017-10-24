@@ -96,7 +96,7 @@ class InflowPlane(object):
         self.uu_tavg = np.mean(self.uu,0) # time averages
         self.vv_tavg = np.mean(self.vv,0)
         self.ww_tavg = np.mean(self.ww,0)
-        self.uu_mean = np.mean( self.uu_tavg ) # space/time (ensemble) average
+        self.uu_mean = np.mean( self.uu_tavg ) # space/time average
         self.vv_mean = np.mean( self.vv_tavg )
         self.ww_mean = np.mean( self.ww_tavg )
 
@@ -291,6 +291,9 @@ class InflowPlane(object):
         self.uu_profile = self.inletMean.uu_profile
         self.vv_profile = self.inletMean.vv_profile
         self.ww_profile = self.inletMean.ww_profile
+        self.uv_profile = self.inletMean.uv_profile
+        self.uw_profile = self.inletMean.uw_profile
+        self.vw_profile = self.inletMean.vw_profile
 
     def readMeanProfile(self,*args,**kwargs):
         """Automatically create a new specified_mean instance and call

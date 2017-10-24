@@ -178,6 +178,9 @@ class InletPlane(object):
         self.uu_profile = np.array(data[:,5])
         self.vv_profile = np.array(data[:,6])
         self.ww_profile = np.array(data[:,7])
+        self.uv_profile = np.array(data[:,8])
+        self.uw_profile = np.array(data[:,9])
+        self.vw_profile = np.array(data[:,10])
 
         self.meanFlowRead = True
         self.variancesRead = True
