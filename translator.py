@@ -455,7 +455,7 @@ class InflowPlane(object):
             xinlet=0.0,
             bcname='inlet',
             LESyfac=None, LESzfac=None,
-            writeU=True, writeT=True, writek=True,
+            writePoints=True, writeU=True, writeT=True, writek=True,
             stdout='verbose'):
         """For use with OpenFOAM's timeVaryingMappedFixedValue boundary
         condition.  This will create a points file and time directories
@@ -505,15 +505,16 @@ class InflowPlane(object):
         #
         # write points file
         #
-        fname = outputdir + os.sep + 'points'
-        print 'Writing',fname
-        with open(fname,'w') as f:
-            f.write(pointsheader.format(patchName=bcname))
-            f.write('{:d}\n(\n'.format(NY*NZ))
-            for k in range(NZ):
-                for j in range(NY):
-                    f.write('({:f} {:f} {:f})\n'.format(xinlet,y[j],z[k]))
-            f.write(')\n')
+        if writePoints:
+            fname = outputdir + os.sep + 'points'
+            print 'Writing',fname
+            with open(fname,'w') as f:
+                f.write(pointsheader.format(patchName=bcname))
+                f.write('{:d}\n(\n'.format(NY*NZ))
+                for k in range(NZ):
+                    for j in range(NY):
+                        f.write('({:f} {:f} {:f})\n'.format(xinlet,y[j],z[k]))
+                f.write(')\n')
 
         #
         # write time dirs
@@ -527,7 +528,7 @@ class InflowPlane(object):
         if writeU:
             u = np.zeros((3,self.NY,self.NZ))
         if writeT:
-            the = np.zeros((self.NY,self.NZ))
+            theta = np.zeros((self.NY,self.NZ))
 
         # begin time-step loop
         for i in range(istart,iend,interval):
@@ -569,15 +570,15 @@ class InflowPlane(object):
                 if not stdout=='overwrite':
                     sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
 
-                the[:,:] = self.T[itime,:,:]
-                the = self.inletMean.addTmean(the)
+                theta[:,:] = self.T[itime,:,:]
+                theta = self.inletMean.addTmean(theta)
 
                 with open(fname,'w') as f:
                     f.write(dataheader.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
                     f.write('{:d}\n(\n'.format(NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
-                            f.write('{s:f}\n'.format(s=the[jidx[j],kidx[k]]))
+                            f.write('{s:f}\n'.format(s=theta[jidx[j],kidx[k]]))
                     f.write(')\n')
 
             # - write out k

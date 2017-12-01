@@ -498,11 +498,11 @@ class InletPlane(object):
         return self.Uinlet + u
 
 
-    def addTmean(self,the):
+    def addTmean(self,theta):
         #for k in range(self.NZ):
         #    for j in range(self.NY):
         #        the[j,k] += self.Tinlet[j,k]
-        return self.Tinlet + the
+        return self.Tinlet + theta
 
 
 #class profile(plane):
