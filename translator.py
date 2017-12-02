@@ -250,7 +250,7 @@ class InflowPlane(object):
             Unew[:,:,:,ioff:ioff+self.NZ] = self.U
             Tnew[  :,:,ioff:ioff+self.NZ] = self.T
         else:
-            iupper = np.min(ioff+self.NZ, newNZ)
+            iupper = np.min((ioff+self.NZ, newNZ))
             Unew[:,:,:,ioff:iupper] = self.U[:,:,:,:iupper-ioff]
             Tnew[  :,:,ioff:iupper] = self.T[  :,:,:iupper-ioff]
         print '  after:',Unew.shape
