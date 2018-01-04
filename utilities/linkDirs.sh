@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+# Utility to symlink time directories within constant/BCname/ for
+#   periodic inflows
+#
+# written by Eliot Quon (eliot.quon@nrel.gov) -- 2017-07-21
+#
 # Note: Only handles integers for now
 
 if [ -z "$1" ]; then
@@ -35,6 +41,7 @@ tLen=$((tEnd0-tStart0+tSkip))
 
 echo "Start/end/delta/length time: $tStart0, $tEnd0, $tSkip, $tLen"
 
+# DRY RUN FIRST
 tgt=$tStart
 src=$tStart
 while [ "$tgt" -le "$tEnd" ]; do
@@ -42,10 +49,27 @@ while [ "$tgt" -le "$tEnd" ]; do
         if [ "$src" -ge "$tLen" ]; then
             src=$((src-tLen))
         fi
-        #echo "$tgt --> $src"
-        ln -sv $src $tgt
+        echo "$tgt --> $src"
     fi
     src=$((src+tSkip))
     tgt=$((tgt+tSkip))
 done
+echo    '-----------------------------------------------'
+read -p 'If this looks right, press enter to continue...'
+echo    '-----------------------------------------------'
 
+echo 'Making symlinks...'
+tgt=$tStart
+src=$tStart
+while [ "$tgt" -le "$tEnd" ]; do
+    if [ ! -d "$tgt" ]; then
+        if [ "$src" -ge "$tLen" ]; then
+            src=$((src-tLen))
+        fi
+        #ln -sv $src $tgt
+        ln -s $src $tgt
+    fi
+    src=$((src+tSkip))
+    tgt=$((tgt+tSkip))
+done
+echo 'Done.'
