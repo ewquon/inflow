@@ -43,19 +43,22 @@ def generate_inflow(prefix,uref,zref=90.0,
 
     U[:,:,:,0] -= uref # InflowWind will add this back to the x-component
     with binaryfile(ufile,'w') as f:
-        for i in range(nx)[::-1]: # indexing goes backwards
+        #for i in range(nx)[::-1]: # indexing goes backwards (frozen turbulence)
+        for i in range(nx): # last time plane is first time snapshot
             for j in range(ny)[::-1]: # backwards
                 f.write_float(U[i,j,:,0]) # forward
     print 'Wrote binary',ufile
 
     with binaryfile(vfile,'w') as f:
-        for i in range(nx)[::-1]: # indexing goes backwards
+        #for i in range(nx)[::-1]: # indexing goes backwards (frozen turbulence)
+        for i in range(nx): # last time plane is first time snapshot
             for j in range(ny)[::-1]: # backwards
                 f.write_float(U[i,j,:,1]) # forward
     print 'Wrote binary',vfile
 
     with binaryfile(wfile,'w') as f:
-        for i in range(nx)[::-1]: # indexing goes backwards
+        #for i in range(nx)[::-1]: # indexing goes backwards (frozen turbulence)
+        for i in range(nx): # last time plane is first time snapshot
             for j in range(ny)[::-1]: # backwards
                 f.write_float(U[i,j,:,2]) # forward
     print 'Wrote binary',wfile
