@@ -9,7 +9,7 @@ import numpy as np
 
 from inflow.translator import InflowPlane
 
-class GaborKS(InflowPlane):
+class KS(InflowPlane):
 
     def __init__(self, prefix=None,
             tidx=0,
