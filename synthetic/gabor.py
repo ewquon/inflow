@@ -3,6 +3,7 @@
 # Module for processing output from GaborKS
 # (Kinematic Simulation using Fourier-Gabor modes developed by Aditya Ghate)
 #
+from __future__ import print_function
 import sys,os
 import time
 import numpy as np
@@ -24,7 +25,7 @@ class KS(InflowPlane):
         self.Ncomp = 3
         if potentialTemperature is not None:
             self.Ncomp += 1
-            print 'Note: Potential temperature is not currently handled!'
+            print('Note: Potential temperature is not currently handled!')
             fieldnames.append('potT')
 
         self.fnames = [ '{}_{}_t{:06d}.out'.format(prefix,fieldvar,tidx) for fieldvar in fieldnames ]
@@ -39,23 +40,23 @@ class KS(InflowPlane):
             self.Umean = self.dx
         elif self.Umean is None:
             self.Umean = self.dx / self.dt
-            print 'Specified dt =',self.dt
-            print 'Calculated Umean =',self.Umean
+            print('Specified dt =',self.dt)
+            print('Calculated Umean =',self.Umean)
         elif self.dt is None:
             self.dt = self.dx / self.Umean
-            print 'Specified Umean =',self.Umean
-            print 'Calculated dt =',self.dt
+            print('Specified Umean =',self.Umean)
+            print('Calculated dt =',self.dt)
         else:
             if self.verbose:
-                print 'Specified Umean, dt =',self.Umean,self.dt
+                print('Specified Umean, dt =',self.Umean,self.dt)
 
         self.t = np.arange(self.NX)*self.dt
         self.y = np.arange(self.NY)*self.dy
         self.z = np.arange(self.NZ)*self.dz
         if self.verbose:
-            print 't range:',[np.min(self.t),np.max(self.t)]
-            print 'y range:',[np.min(self.y),np.max(self.y)]
-            print 'z range:',[np.min(self.z),np.max(self.z)]
+            print('t range:',[np.min(self.t),np.max(self.t)])
+            print('y range:',[np.min(self.y),np.max(self.y)])
+            print('z range:',[np.min(self.z),np.max(self.z)])
 
         if self.fnames is not None:
             self.readField(self.fnames)
@@ -81,10 +82,10 @@ class KS(InflowPlane):
                 np.linspace(self.dz/2,self.Lz-(self.dz/2),self.NZ),
                 indexing='ij')
 
-        print 'Read info file',fname
+        print('Read info file',fname)
         if self.verbose:
-            print '  domain dimensions:',[self.NX,self.NY,self.NZ]
-            print '  domain extents:',[self.Lx,self.Ly,self.Lz],'m'
+            print('  domain dimensions:',[self.NX,self.NY,self.NZ])
+            print('  domain extents:',[self.Lx,self.Ly,self.Lz],'m')
 
 
     def readField(self,fnames):

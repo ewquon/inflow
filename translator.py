@@ -3,12 +3,13 @@
 # Generalized inflow preprocessing module for numerical ABL inflow experiments
 # written by Eliot Quon (eliot.quon.nrel.gov) - 2017-07-10
 #
+from __future__ import print_function
 import sys,os
 import time
 
 import numpy as np
 
-import specified_mean
+import inflow.time_varying_mapped
 from datatools.vtkTools import vtk_write_structured_points
 from datatools.SOWFA.timeVaryingMappedBC import pointsheader, dataheader
 
@@ -34,7 +35,8 @@ class InflowPlane(object):
         """
         self.verbose = verbose
         self.Umean = None # reference velocity
-        self.inletMean = None # a specified_mean object, which may be a profile or (time-varying) inflow plane
+        self.inletMean = None # a time_varying_mapped object, which may be a
+                              # profile or (time-varying) inflow plane
         self.haveField = False # True after the velocity field has been read
 
         self.inflowSourceDir = None
@@ -58,8 +60,8 @@ class InflowPlane(object):
 
     def readField(self):
         """Stub to read inflow field"""
-        print 'This function should be overridden for each inflow class...'
-        print 'No inflow data were read.'
+        print('This function should be overridden for each inflow class...')
+        print('No inflow data were read.')
 
 
     def createEmptyField(self, Ly, Lz, Ny, Nz, times=[0,1000.0,2000.0]):
@@ -100,7 +102,7 @@ class InflowPlane(object):
         self.vv_mean = np.mean( self.vv_tavg )
         self.ww_mean = np.mean( self.ww_tavg )
 
-        print 'Spatial average of <u\'u\'>, <v\'v\'>, <w\'w\'> :',self.uu_mean,self.vv_mean,self.ww_mean
+        print('Spatial average of <u\'u\'>, <v\'v\'>, <w\'w\'> :',self.uu_mean,self.vv_mean,self.ww_mean)
 
         if output is not None:
             with open(output,'w') as f:
@@ -114,7 +116,7 @@ class InflowPlane(object):
                 f.write('\n   Height   Standard deviation at grid points for the w component:\n')
                 for i,zi in enumerate(self.z):
                         f.write('z= {:.1f} : {}\n'.format(zi,np.sqrt(self.ww_tavg[:,i])))
-            print 'Wrote out',output
+            print('Wrote out',output)
 
 
     #===========================================================================
@@ -130,8 +132,8 @@ class InflowPlane(object):
         Set 'mirror' to True to flip every other tile
         """
         ntiles = int(ntiles)
-        print 'Creating',ntiles,'horizontal tiles'
-        print '  before:',self.U.shape
+        print('Creating',ntiles,'horizontal tiles')
+        print('  before:',self.U.shape)
         if mirror:
             # [0 1 2] --> [0 1 2 1 0 1 2 .. ]
             NYnew = (self.NY-1)*ntiles + 1
@@ -161,7 +163,7 @@ class InflowPlane(object):
             Tplane0[  :,0,:] = self.T[  :,-1,:]
             self.U = np.concatenate((self.U,Uplane0),axis=1)
             self.T = np.concatenate((self.T,Tplane0),axis=1)
-        print '  after :',self.U.shape
+        print('  after :',self.U.shape)
 
         self.NY = NYnew
         assert( self.U.shape == (3,self.N,self.NY,self.NZ) )
@@ -179,18 +181,19 @@ class InflowPlane(object):
         Ly_specified = yMax - yMin
         Ly = self.y[-1] - self.y[0]
         if Ly_specified > Ly:
-            print 'Specified y range', (yMin,yMax), \
-                    'greater than', (self.y[0],self.y[-1])
+            print('Specified y range', (yMin,yMax),
+                    'greater than', (self.y[0],self.y[-1]))
             return
 
         if dryrun: sys.stdout.write('(DRY RUN) ')
-        print 'Resizing fluctuations field in y-dir from [', self.y[0],self.y[-1],'] to [',yMin,yMax,']'
-        print '  before:',self.U.shape
+        print('Resizing fluctuations field in y-dir from [',
+                self.y[0],self.y[-1],'] to [',yMin,yMax,']')
+        print('  before:',self.U.shape)
         
         newNY = int(np.ceil(Ly_specified/Ly * self.NY))
         Unew = self.U[:,:,:newNY,:]
         Tnew = self.T[  :,:newNY,:]
-        print '  after:',Unew.shape
+        print('  after:',Unew.shape)
         if not dryrun:
             self.U = Unew
             self.T = Tnew
@@ -198,10 +201,10 @@ class InflowPlane(object):
 
         ynew = yMin + np.arange(newNY,dtype=self.realtype)*self.dy
         if not dryrun:
-            print 'Updating y coordinates'
+            print('Updating y coordinates')
             self.y = ynew
         else:
-            print '(DRY RUN) y coordinates:',ynew
+            print('(DRY RUN) y coordinates:',ynew)
 
         # flag update for mean profile
        #self.inletMean.meanFlowSet = False
@@ -223,10 +226,10 @@ class InflowPlane(object):
             zMax = self.z[-1]
         if not shrink:
             if zMin > self.z[0]:
-                print 'zMin not changed from',self.z[0],'to',zMin
+                print('zMin not changed from',self.z[0],'to',zMin)
                 return
             if zMax < self.z[-1]:
-                print 'zMax not changed from',self.z[-1],'to',zMax
+                print('zMax not changed from',self.z[-1],'to',zMax)
                 return
 
         self.zbot = zMin
@@ -237,8 +240,9 @@ class InflowPlane(object):
         zMax = imax*self.dz
         ioff = int((self.z[0]-zMin)/self.dz)
         if dryrun: sys.stdout.write('(DRY RUN) ')
-        print 'Resizing fluctuations field in z-dir from [', self.z[0],self.z[-1],'] to [',zMin,zMax,']'
-        print '  before:',self.U.shape
+        print('Resizing fluctuations field in z-dir from [',
+                self.z[0],self.z[-1],'] to [',zMin,zMax,']')
+        print('  before:',self.U.shape)
         
         newNZ = imax-imin+1
         Unew = np.zeros((3,self.N,self.NY,newNZ))
@@ -253,7 +257,7 @@ class InflowPlane(object):
             iupper = np.min((ioff+self.NZ, newNZ))
             Unew[:,:,:,ioff:iupper] = self.U[:,:,:,:iupper-ioff]
             Tnew[  :,:,ioff:iupper] = self.T[  :,:,:iupper-ioff]
-        print '  after:',Unew.shape
+        print('  after:',Unew.shape)
         if not dryrun:
             self.U = Unew
             self.T = Tnew
@@ -261,13 +265,13 @@ class InflowPlane(object):
 
         znew = self.zbot + np.arange(newNZ,dtype=self.realtype)*self.dz
         if not dryrun:
-            print 'Updating z coordinates'
+            print('Updating z coordinates')
             self.z = znew
         else:
-            print '(DRY RUN) z coordinates:',znew
+            print('(DRY RUN) z coordinates:',znew)
 
         if not dryrun:
-            print 'Resetting scaling function'
+            print('Resetting scaling function')
             self.scaling = np.ones((3,newNZ))
 
         # flag update for mean profile
@@ -281,10 +285,10 @@ class InflowPlane(object):
     #===========================================================================
 
     def readAllProfiles(self,*args,**kwargs):
-        """Automatically create a new specified_mean instance and call
+        """Automatically create a new time_varying_mapped instance and call
         the appropriate input function"""
         if self.inletMean is None:
-            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+            self.inletMean = inflow.time_varying_mapped.Inlet(self.y,self.z)
         self.inletMean.readAllProfiles(*args,**kwargs)
         # for backwards compatibility:
         self.z_profile  = self.inletMean.z_profile
@@ -296,19 +300,19 @@ class InflowPlane(object):
         self.vw_profile = self.inletMean.vw_profile
 
     def readMeanProfile(self,*args,**kwargs):
-        """Automatically create a new specified_mean instance and call
+        """Automatically create a new time_varying_mapped instance and call
         the appropriate input function"""
         if self.inletMean is None:
-            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+            self.inletMean = inflow.time_varying_mapped.Inlet(self.y,self.z)
         self.inletMean.readMeanProfile(*args,**kwargs)
         # for backwards compatibility:
         self.z_profile  = self.inletMean.z_profile
 
     def readVarianceProfile(self,*args,**kwargs):
-        """Automatically create a new specified_mean instance and call
+        """Automatically create a new time_varying_mapped instance and call
         the appropriate input function"""
         if self.inletMean is None:
-            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+            self.inletMean = inflow.time_varying_mapped.Inlet(self.y,self.z)
         self.inletMean.readVarianceProfile(*args,**kwargs)
         # for backwards compatibility:
         self.z_profile  = self.inletMean.z_profile
@@ -317,19 +321,19 @@ class InflowPlane(object):
         self.ww_profile = self.inletMean.ww_profile
 
     def setMeanProfile(self,*args,**kwargs):
-        """Automatically create a new specified_mean instance and call
+        """Automatically create a new time_varying_mapped instance and call
         the appropriate input function"""
         if self.inletMean is None:
-            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+            self.inletMean = inflow.time_varying_mapped.Inlet(self.y,self.z)
         self.inletMean.setMeanProfiles(*args,**kwargs)
         # for backwards compatibility:
         self.z_profile  = self.inletMean.z_profile
 
     def setTkeProfile(self,*args,**kwargs):
-        """Automatically create a new specified_mean instance and call
+        """Automatically create a new time_varying_mapped instance and call
         the appropriate input function"""
         if self.inletMean is None:
-            self.inletMean = specified_mean.InletPlane(self.y,self.z)
+            self.inletMean = inflow.time_varying_mapped.Inlet(self.y,self.z)
         self.inletMean.setTkeProfile(*args,**kwargs)
         # for backwards compatibility:
         self.z_profile  = self.inletMean.z_profile
@@ -369,7 +373,7 @@ class InflowPlane(object):
             if hasattr(max_scaling,'__call__'): evalfn = True
             max_scaling = [max_scaling,max_scaling,max_scaling]
 
-        if evalfn: print 'Using custom scaling function instead of tanh'
+        if evalfn: print('Using custom scaling function instead of tanh')
         else:
             assert( tanh_z90 > 0 and tanh_z50 > 0 )
             k = np.arctanh(0.8) / (tanh_z90-tanh_z50)
@@ -384,10 +388,10 @@ class InflowPlane(object):
             #assert( fmin >= 0. and fmax <= max_scaling[i] )
             assert(fmax <= max_scaling[i])
             if fmin < 0:
-                print 'Attempting to correct scaling function with fmin =',fmin
+                print('Attempting to correct scaling function with fmin =',fmin)
                 self.scaling = np.maximum(self.scaling,0)
                 fmin = 0
-            print 'Updated scaling range (dir={}) : {} {}'.format(i,fmin,fmax)
+            print('Updated scaling range (dir={}) : {} {}'.format(i,fmin,fmax))
         
         if output:
             with open(output,'w') as f:
@@ -399,7 +403,7 @@ class InflowPlane(object):
                 f.write('# z  f_u(z)  f_v(z)  f_w(z)\n')
                 for iz,z in enumerate(self.z):
                     f.write(' {:f} {f[0]:g} {f[1]:g} {f[2]:g}\n'.format(z,f=self.scaling[:,iz]))
-            print 'Wrote scaling function to',output
+            print('Wrote scaling function to',output)
 
 
     #===========================================================================
@@ -410,7 +414,7 @@ class InflowPlane(object):
 
     def setInflowSourceDirectory(self,dpath,tstart=None):
         """This sets inflowSourceDir (after checking if a 'points' file exists)
-        which will be passed to specified_mean. Specification of a source dir
+        which will be passed to time_varying_mapped. Specification of a source dir
         will set the 2D inflow flag.
 
         If tstart is not specified, then the starting time corresponding to t=0
@@ -419,14 +423,14 @@ class InflowPlane(object):
         """
         pointsFile = os.path.join(dpath,'points')
         if os.path.isfile(pointsFile):
-            self.inletMean = specified_mean.InletPlane(self.y,self.z,dpath,tstart)
+            self.inletMean = inflow.time_varying_mapped.Inlet(self.y,self.z,dpath,tstart)
         else:
-            print 'Error:',pointsFile,'does not exist!'
+            print('Error:',pointsFile,'does not exist!')
         self.needUpdateMean = True
 
     def readInflowFromBC(self,itime=None,*args,**kwargs):
         """Reads inflow at time index itime from Useries and Tseries (setup after
-        a specified_mean object is initialized from setupInflowSourceDirectory).
+        a time_varying_mapped object is initialized from setupInflowSourceDirectory).
 
         U_planar, V_planar, W_planar, and T_planar are updated using the
         datatools/SOWFA/timeVaryingMappedBC module. These data are interpolated to
@@ -469,14 +473,14 @@ class InflowPlane(object):
         LESyfac and LESzfac specify refinement in the microscale domain.
         """
         if not os.path.isdir(outputdir):
-            print 'Creating output dir :',outputdir
+            print('Creating output dir :',outputdir)
             os.makedirs(outputdir)
 
         if (self.inletMean is not None) and not self.inletMean.meanFlowSet:
-            print 'Note: Mean profiles have not been set or read from files'
+            print('Note: Mean profiles have not been set or read from files')
             self.inletMean.setup() # set up inlet profile functions
         if writek and not self.inletMean.tkeProfileSet:
-            print 'Note: Mean TKE profile has not been set'
+            print('Note: Mean TKE profile has not been set')
             self.setTkeProfile()
 
         # figure out indexing in the case that the LES mesh has some (integer)
@@ -484,16 +488,16 @@ class InflowPlane(object):
         if LESyfac >= 1 and LESzfac >= 1:
             NY = int( LESyfac*(self.NY-1) ) + 1
             NZ = int( LESzfac*(self.NZ-1) ) + 1
-            print 'LES y resolution increased from',self.NY,'to',NY
-            print 'LES z resolution increased from',self.NZ,'to',NZ
+            print('LES y resolution increased from',self.NY,'to',NY)
+            print('LES z resolution increased from',self.NZ,'to',NZ)
             jidx = np.zeros(NY,dtype=np.int)
             kidx = np.zeros(NZ,dtype=np.int)
             for j in range(NY): jidx[j] = int(j/LESyfac)
             for k in range(NZ): kidx[k] = int(k/LESzfac)
             y =             np.arange(NY,dtype=self.realtype)*self.dy/LESyfac
             z = self.zbot + np.arange(NZ,dtype=self.realtype)*self.dz/LESzfac
-            print 'refined y range :',np.min(y),np.max(y)
-            print 'refined z range :',np.min(z),np.max(z)
+            print('refined y range :',np.min(y),np.max(y))
+            print('refined z range :',np.min(z),np.max(z))
         else:
             NY = self.NY
             NZ = self.NZ
@@ -507,7 +511,7 @@ class InflowPlane(object):
         #
         if writePoints:
             fname = outputdir + os.sep + 'points'
-            print 'Writing',fname
+            print('Writing',fname)
             with open(fname,'w') as f:
                 f.write(pointsheader.format(patchName=bcname))
                 f.write('{:d}\n(\n'.format(NY*NZ))
@@ -523,7 +527,7 @@ class InflowPlane(object):
             Tend = self.t[-1]
         istart = int(self.realtype(Tstart) / self.dt)
         iend = int(self.realtype(Tend) / self.dt)
-        print 'Outputting time length',(iend-istart)*self.dt
+        print('Outputting time length',(iend-istart)*self.dt)
 
         if writeU:
             u = np.zeros((3,self.NY,self.NZ))
@@ -613,14 +617,14 @@ class InflowPlane(object):
         if output_time:
             itime = int(output_time / self.dt)
         if itime is None:
-            print 'Need to specify itime or output_time'
+            print('Need to specify itime or output_time')
             return
         if stdout=='overwrite':
             sys.stdout.write('\rWriting time step {:d} :  t= {:f}'.format(
                 itime,self.t[itime]))
         else: #if stdout=='verbose':
-            print 'Writing out VTK for time step',itime,': t=',self.t[itime]
-		
+            print('Writing out VTK for time step',itime,': t=',self.t[itime])
+
         if self.inletMean.interpTime:
             self.inletMean.setupForTime(self.t[itime]) # update Uinlet, Tinlet
 
@@ -666,13 +670,13 @@ class InflowPlane(object):
             stdout='overwrite'):
         """Driver for writeVTK to output a range of times"""
         if not os.path.isdir(outputdir):
-            print 'Creating output dir :',outputdir
+            print('Creating output dir :',outputdir)
             os.makedirs(outputdir)
 
         for i in range(0,self.N,step):
             fname = outputdir + os.sep + prefix + '_' + str(i) + '.vtk'
             self.writeVTK(fname,itime=i,scaled=scaled,stdout=stdout)
-	if stdout=='overwrite': sys.stdout.write('\n')
+        if stdout=='overwrite': sys.stdout.write('\n')
 
 
     def writeVTKSeriesAsBlock(self,
@@ -688,11 +692,11 @@ class InflowPlane(object):
         if outputdir is None:
             outputdir = '.'
         elif not os.path.isdir(outputdir):
-            print 'Creating output dir :',outputdir
+            print('Creating output dir :',outputdir)
             os.makedirs(outputdir)
 
         fname = os.path.join(outputdir,fname)
-        print 'Writing VTK block',fname
+        print('Writing VTK block',fname)
 
         if self.Umean is not None:
             Umean = self.Umean
@@ -731,7 +735,7 @@ class InflowPlane(object):
         if (self.inletMean is not None) and not self.inletMean.meanFlowSet:
             self.inletMean.setup()
 
-        print 'Writing out VTK slice',idx,'at y=',self.y[idx],'to',fname
+        print('Writing out VTK slice',idx,'at y=',self.y[idx],'to',fname)
 
         # scale fluctuations
         up = np.zeros((self.N,1,self.NZ))
@@ -774,7 +778,7 @@ class InflowPlane(object):
         if (self.inletMean is not None) and not self.inletMean.meanFlowSet:
             self.inletMean.setup()
 
-        print 'Writing out VTK slice',idx,'at z=',self.z[idx],'to',fname
+        print('Writing out VTK slice',idx,'at z=',self.z[idx],'to',fname)
 
         # scale fluctuations
         up = np.zeros((self.N,self.NY,1))

@@ -8,6 +8,7 @@
 # USAGE: Process ./*/inflowPlane_03km_U.000.U for a reference velocity of 8 m/s
 #   ensight_planes_to_hawc.py 'inflowPlane_03km_U' 8.0
 #
+from __future__ import print_function
 import numpy as np
 
 from waketracking.dataloaders import foam_ensight_array # TODO: move this to NWTC/datatools
@@ -34,9 +35,9 @@ def generate_inflow(prefix,uref,zref=90.0,
     nz = inflow.NZ
     y = Y[:,0]
     z = Z[0,:]
-    print 'x :',nx,(t-t[0])*uref
-    print 'y :',ny,y
-    print 'z :',nz,z
+    print('x :',nx,(t-t[0])*uref)
+    print('y :',ny,y)
+    print('z :',nz,z)
     dx = uref*(t[1]-t[0])
     dy = y[1] - y[0]
     dz = z[1] - z[0]
@@ -47,21 +48,21 @@ def generate_inflow(prefix,uref,zref=90.0,
         for i in range(nx): # last time plane is first time snapshot
             for j in range(ny)[::-1]: # backwards
                 f.write_float(U[i,j,:,0]) # forward
-    print 'Wrote binary',ufile
+    print('Wrote binary',ufile)
 
     with binaryfile(vfile,'w') as f:
         #for i in range(nx)[::-1]: # indexing goes backwards (frozen turbulence)
         for i in range(nx): # last time plane is first time snapshot
             for j in range(ny)[::-1]: # backwards
                 f.write_float(U[i,j,:,1]) # forward
-    print 'Wrote binary',vfile
+    print('Wrote binary',vfile)
 
     with binaryfile(wfile,'w') as f:
         #for i in range(nx)[::-1]: # indexing goes backwards (frozen turbulence)
         for i in range(nx): # last time plane is first time snapshot
             for j in range(ny)[::-1]: # backwards
                 f.write_float(U[i,j,:,2]) # forward
-    print 'Wrote binary',wfile
+    print('Wrote binary',wfile)
 
     with open(inflowfile,'w') as f:
         f.write(
@@ -75,7 +76,7 @@ def generate_inflow(prefix,uref,zref=90.0,
                 nx=nx, ny=ny, nz=nz,
                 dx=dx, dy=dy, dz=dz
         ))
-    print 'Wrote',inflowfile
+    print('Wrote',inflowfile)
 
 
 #===============================================================================

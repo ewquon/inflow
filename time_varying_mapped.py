@@ -13,8 +13,8 @@ import numpy as np
 from datatools.timeseries import TimeSeries
 import datatools.SOWFA.timeVaryingMappedBC as bc
 
-class InletPlane(object):
-    """A general 2-D representation fo the mean flow, i.e., U(y,z) for flow in x
+class Inlet(object):
+    """A general 2-D representation of the inflow, i.e., U(y,z) for flow in x
     """
 
     def __init__(self,y=[0],z=[0],sourceDir=None,tstart=None):
@@ -55,27 +55,27 @@ class InletPlane(object):
             self.y_planar = y
             self.z_planar = z
             if not np.all(self.y == self.y_planar):
-                print 'Note: Mean inflow plane initialized with mismatched boundary points in y'
-                print '  fluctuations y-grid:',self.y
-                print '     mean flow y-grid:',self.y_planar
+                print('Note: Mean inflow plane initialized with mismatched boundary points in y')
+                print('  fluctuations y-grid:',self.y)
+                print('     mean flow y-grid:',self.y_planar)
             if not np.all(self.z == self.z_planar):
-                print 'Note: Mean inflow plane initialized with mismatched boundary points in z'
-                print '  fluctuations z-grid:',self.z
-                print '     mean flow z-grid:',self.z_planar
+                print('Note: Mean inflow plane initialized with mismatched boundary points in z')
+                print('  fluctuations z-grid:',self.z)
+                print('     mean flow z-grid:',self.z_planar)
             self.inflowIs2D = True
 
             self.Useries = TimeSeries(sourceDir,filename='U')
             self.Tseries = TimeSeries(sourceDir,filename='T')
             assert(len(self.Useries) == len(self.Tseries))
-            print 'U inflow series :',self.Useries
-            print 'T inflow series :',self.Tseries
+            print('U inflow series :',self.Useries)
+            print('T inflow series :',self.Tseries)
 
             self.timeseries = np.array(self.Useries.outputTimes)
             assert(np.all(self.timeseries == self.Tseries.outputTimes))
             if tstart is None:
                 self.tstart = self.timeseries[0]
             self.timeseries -= self.tstart
-            print 'inflow times :',self.timeseries,'( started from',self.tstart,')'
+            print('inflow times :',self.timeseries,'( started from',self.tstart,')')
 
         # flow input flags
         self.haveMeanFlow = False # True after setMeanProfiles(), readMeanProfile(), readAllProfiles(), readMeanPlane(), or readAllMeanPlanes()
@@ -153,9 +153,9 @@ class InletPlane(object):
         for iz,z in enumerate(self.z):
             self.kinlet[iz] = k_profile(z)
 
-        #print 'Set TKE profile:  z  k'
+        #print('Set TKE profile:  z  k')
         #for iz,k in enumerate(self.kinlet):
-        #    print self.z[iz],k
+        #    print(self.z[iz],k)
 
         self.tkeProfileSet = True
 
@@ -308,7 +308,7 @@ class InletPlane(object):
         self.T_planar = np.zeros((Ntimes,NY,NZ))
 
         for itime,ti in enumerate(self.timeseries):
-            print 'Processing mean inflow at t=',ti,':'
+            print('Processing mean inflow at t=',ti,':')
             vdata = bc.readVectorData(self.Useries[itime],NY=NY,NZ=NZ)
             self.U_planar[itime,:,:] = vdata[0,:,:]
             self.V_planar[itime,:,:] = vdata[1,:,:]
@@ -334,7 +334,7 @@ class InletPlane(object):
         profile.
         """
         if self.meanFlowSet:
-            print 'Note: Mean profiles have already been set and will be overwritten'
+            print('Note: Mean profiles have already been set and will be overwritten')
 
         self.Uinlet = np.zeros((3,self.NY,self.NZ))
         self.Tinlet = np.zeros((self.NY,self.NZ))
@@ -362,9 +362,9 @@ class InletPlane(object):
                         self.Tinlet[iy,iz]   = Tz
 
        #if self.verbose:
-       #    print 'Specified mean profile:  z  U  T'
+       #    print('Specified mean profile:  z  U  T')
        #    for iz,z in enumerate(self.z):
-       #        print self.z[iz], self.Uinlet[:,0,iz], self.Tinlet[0,iz]
+       #        print(self.z[iz], self.Uinlet[:,0,iz], self.Tinlet[0,iz])
 
         self.meanFlowSet = True
 

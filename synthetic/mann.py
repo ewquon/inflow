@@ -2,6 +2,7 @@
 #
 # Module for processing output from the WAsP IEC Turbulence Generator
 #
+from __future__ import print_function
 import sys,os
 import time
 import numpy as np
@@ -52,28 +53,28 @@ class windsimu_binary(InflowPlane):
             self.fnames = [self.fnames]
 
         if self.verbose:
-            print 'Domain extents: ',[self.Lx,self.Ly,self.Lz]
-            print 'Cell spacings: ', [self.dx,self.dy,self.dz]
+            print('Domain extents: ',[self.Lx,self.Ly,self.Lz])
+            print('Cell spacings: ', [self.dx,self.dy,self.dz])
 
         if self.dt is None and self.Umean is None:
             self.dt = 1.0
             self.Umean = self.dx
         elif self.Umean is None:
             self.Umean = self.dx / self.dt
-            print 'Specified dt =',self.dt
-            print 'Calculated Umean =',self.Umean
+            print('Specified dt =',self.dt)
+            print('Calculated Umean =',self.Umean)
         elif self.dt is None:
             self.dt = self.dx / self.Umean
-            print 'Specified Umean =',self.Umean
-            print 'Calculated dt =',self.dt
+            print('Specified Umean =',self.Umean)
+            print('Calculated dt =',self.dt)
 
         self.t = np.arange(self.NX)*self.dt
         self.y = np.arange(self.NY)*self.dy
         self.z = np.arange(self.NZ)*self.dz
         if self.verbose:
-            print 't range:',[np.min(self.t),np.max(self.t)]
-            print 'y range:',[np.min(self.y),np.max(self.y)]
-            print 'z range:',[np.min(self.z),np.max(self.z)]
+            print('t range:',[np.min(self.t),np.max(self.t)])
+            print('y range:',[np.min(self.y),np.max(self.y)])
+            print('z range:',[np.min(self.z),np.max(self.z)])
 
         if self.fnames is not None:
             self.readField(self.fnames)
@@ -85,7 +86,7 @@ class windsimu_binary(InflowPlane):
             def readFloat(): return float(f.readline())
             fieldDim = readInt()
             if not fieldDim==3:
-                print 'fieldDim != 3 not handled'
+                print('fieldDim != 3 not handled')
             Ncomp = readInt()
             components = [1,2,3]
             if Ncomp == 1:
@@ -93,7 +94,7 @@ class windsimu_binary(InflowPlane):
             elif Ncomp == 2:
                 components = components.pop(readInt())
             elif Ncomp > 3:
-                print 'Ncomp ==',Ncomp,'???'
+                print('Ncomp ==',Ncomp,'???')
             dimensions = []
             for idim in range(fieldDim):
                 dimensions.append(readInt())
@@ -118,13 +119,13 @@ class windsimu_binary(InflowPlane):
         self.Ly = extents[1]
         self.Lz = extents[2]
 
-        print 'Read input file',fname
+        print('Read input file',fname)
         if self.verbose:
-            print '  {:d}D field'.format(fieldDim)
-            print '  velocity components:',components
-            print '  domain dimensions:',dimensions
-            print '  domain extents:',extents,'m'
-            print '  turbulence type:',turbtype
+            print('  {:d}D field'.format(fieldDim))
+            print('  velocity components:',components)
+            print('  domain dimensions:',dimensions))
+            print('  domain extents:',extents,'m')
+            print('  turbulence type:',turbtype)
 
 
     def readField(self,fnames):
@@ -142,13 +143,13 @@ class windsimu_binary(InflowPlane):
 
     def _readBinary(self,fname,icomp):
         if self.verbose:
-            print 'Reading',fname
+            print('Reading',fname)
         N = self.NX * self.NY * self.NZ
         with binaryfile(fname) as f:
             data = f.read_real4(N)
             self.U[icomp,:,:,:] =  np.array(data).reshape((self.NX,self.NY,self.NZ),order='C')
         if self.verbose:
-            print 'Velocity component ranges:'
+            print('Velocity component ranges:')
             for i in range(self.Ncomp):
-                print '  U'+str(i)+': ',[np.min(self.U[:,:,:,i]),np.max(self.U[:,:,:,i])]
+                print('  U'+str(i)+': ',[np.min(self.U[:,:,:,i]),np.max(self.U[:,:,:,i])])
 
