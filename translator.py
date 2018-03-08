@@ -480,7 +480,11 @@ class InflowPlane(object):
 
         # TODO: check time-varying input
         assert(time_varying_input is not None) # TODO: GENERALIZE THIS LATER
-        NT, NY, NZ, _ = time_varying_input['U'].shape
+        #NT, NY, NZ, _ = time_varying_input['U'].shape
+        Uinput = time_varying_input['U']
+        Tinput = time_varying_input['T']
+        kinput = time_varying_input['k']
+        NT, NY, NZ, _ = Uinput.shape
         u = np.zeros((NY,NZ)) # working array
         v = np.zeros((NY,NZ)) # working array
         w = np.zeros((NY,NZ)) # working array
@@ -517,10 +521,10 @@ class InflowPlane(object):
                 w[:,iz] *= self.scaling[2,iz]
 
             # superimpose inlet snapshot
-            u[:,:] += time_varying_input['U'][itime,:,:,0]
-            v[:,:] += time_varying_input['U'][itime,:,:,1]
-            w[:,:] += time_varying_input['U'][itime,:,:,2]
-            T[:,:] += time_varying_input['T'][itime,:,:]
+            u[:,:] += Uinput[itime,:,:,0]
+            v[:,:] += Uinput[itime,:,:,1]
+            w[:,:] += Uinput[itime,:,:,2]
+            T[:,:] += Tinput[itime,:,:]
 
             # write out U
             fname = os.path.join(prefix,'U')
@@ -546,7 +550,7 @@ class InflowPlane(object):
             fname = os.path.join(prefix,'k')
             print('Writing out',fname)
             bc.write_data(fname,
-                          time_varying_input['k'][itime,:,:].ravel(order='F'),
+                          kinput[itime,:,:].ravel(order='F'),
                           patchName=bcname,
                           timeName=tname,
                           avgValue='0')
