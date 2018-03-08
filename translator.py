@@ -536,7 +536,7 @@ class InflowPlane(object):
                                     w.ravel(order='F'))),
                           patchName=bcname,
                           timeName=tname,
-                          avgValue='(0 0 0)')
+                          avgValue=[0,0,0])
 
             # write out T
             fname = os.path.join(prefix,'T')
@@ -545,7 +545,7 @@ class InflowPlane(object):
                           T.ravel(order='F'),
                           patchName=bcname,
                           timeName=tname,
-                          avgValue='0')
+                          avgValue=0)
 
             # write out k
             fname = os.path.join(prefix,'k')
@@ -554,7 +554,7 @@ class InflowPlane(object):
                           kinput[itime,:,:].ravel(order='F'),
                           patchName=bcname,
                           timeName=tname,
-                          avgValue='0')
+                          avgValue=0)
 
 
     def writeMappedBC(self,
