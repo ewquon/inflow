@@ -456,7 +456,8 @@ class InflowPlane(object):
                         outputdir='boundaryData',
                         time_varying_input=None,
                         bcname='west',
-                        xinlet=0.0):
+                        xinlet=0.0,
+                        tstart=0.0):
         """For use with OpenFOAM's timeVaryingMappedFixedValue boundary
         condition.  This will create a points file and time directories
         in 'outputdir', which should be placed in
@@ -504,7 +505,7 @@ class InflowPlane(object):
 
         # begin time-step loop
         for itime in range(NT):
-            tname = '{:f}'.format(self.realtype(itime*self.dt)).rstrip('0').rstrip('.')
+            tname = '{:f}'.format(self.realtype(tstart+(itime+1)*self.dt)).rstrip('0').rstrip('.')
 
             prefix = os.path.join(dpath,tname)
             if not os.path.isdir(prefix):
