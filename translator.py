@@ -11,7 +11,7 @@ import numpy as np
 
 import inflow.time_varying_mapped
 from datatools.vtkTools import vtk_write_structured_points
-from datatools.SOWFA.timeVaryingMappedBC import pointsheader, dataheader
+import datatools.SOWFA.timeVaryingMappedBC as bc
 
 class InflowPlane(object):
 
@@ -234,10 +234,10 @@ class InflowPlane(object):
 
         self.zbot = zMin
 
-        imin = int(zMin/self.dz)
-        imax = int(np.ceil(zMax/self.dz))
-        zMin = imin*self.dz
-        zMax = imax*self.dz
+        imin = int((zMin-self.z[0])/self.dz)
+        imax = int(np.ceil((zMax-self.z[0])/self.dz))
+        zMin = imin*self.dz + self.z[0]
+        zMax = imax*self.dz + self.z[0]
         ioff = int((self.z[0]-zMin)/self.dz)
         if dryrun: sys.stdout.write('(DRY RUN) ')
         print('Resizing fluctuations field in z-dir from [',
@@ -452,6 +452,106 @@ class InflowPlane(object):
     #
     #===========================================================================
 
+    def write_mapped_BC(self,
+                        outputdir='boundaryData',
+                        time_varying_input=None,
+                        bcname='west',
+                        xinlet=0.0):
+        """For use with OpenFOAM's timeVaryingMappedFixedValue boundary
+        condition.  This will create a points file and time directories
+        in 'outputdir', which should be placed in
+            constant/boundaryData/<patchname>.
+
+        time_varying_input should be a (NT, NY, NZ, 3) array which
+        shoud be aligned with the loaded data in terms of (dy, dz, dt,
+        and NT)
+        """
+        dpath = os.path.join(outputdir, bcname)
+        if not os.path.isdir(dpath):
+            print('Creating output dir :',dpath)
+            os.makedirs(dpath)
+
+#        if (self.inletMean is not None) and not self.inletMean.meanFlowSet:
+#            print('Note: Mean profiles have not been set or read from files')
+#            self.inletMean.setup() # set up inlet profile functions
+#        if not self.inletMean.tkeProfileSet:
+#            print('Note: Mean TKE profile has not been set')
+#            self.setTkeProfile()
+
+        # TODO: check time-varying input
+        assert(time_varying_input is not None) # TODO: GENERALIZE THIS LATER
+        NT, NY, NZ, _ = time_varying_input['U'].shape
+        u = np.zeros((NY,NZ)) # working array
+        v = np.zeros((NY,NZ)) # working array
+        w = np.zeros((NY,NZ)) # working array
+        T = np.zeros((NY,NZ)) # working array
+
+        # write points
+        fname = os.path.join(dpath,'points')
+        print('Writing',fname)
+        with open(fname,'w') as f:
+            f.write(bc.pointsheader.format(patchName=bcname,N=NY*NZ))
+            for k in range(NZ):
+                for j in range(NY):
+                    f.write('({:f} {:f} {:f})\n'.format(xinlet,
+                                                        self.y[j],
+                                                        self.z[k]))
+            f.write(')\n')
+
+        # begin time-step loop
+        for itime in range(NT):
+            tname = '{:f}'.format(self.realtype(itime*self.dt)).rstrip('0').rstrip('.')
+
+            prefix = os.path.join(dpath,tname)
+            if not os.path.isdir(prefix):
+                os.makedirs(prefix)
+
+            # scale fluctuations
+            u[:,:] = self.U[0,itime,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
+            v[:,:] = self.U[1,itime,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
+            w[:,:] = self.U[2,itime,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
+            T[:,:] = self.T[itime,:NY,:NZ] # self.T.shape == (self.NT, self.NY, self.NZ)
+            for iz in range(NZ): # note: u is the original size
+                u[:,iz] *= self.scaling[0,iz]
+                v[:,iz] *= self.scaling[1,iz]
+                w[:,iz] *= self.scaling[2,iz]
+
+            # superimpose inlet snapshot
+            u[:,:] += time_varying_input['U'][itime,:,:,0]
+            v[:,:] += time_varying_input['U'][itime,:,:,1]
+            w[:,:] += time_varying_input['U'][itime,:,:,2]
+            T[:,:] += time_varying_input['T'][itime,:,:]
+
+            # write out U
+            fname = os.path.join(prefix,'U')
+            print('Writing out',fname)
+            bc.write_data(fname,
+                          np.stack((u.ravel(order='F'),
+                                    v.ravel(order='F'),
+                                    w.ravel(order='F'))),
+                          patchName=bcname,
+                          timeName=tname,
+                          avgValue='(0 0 0)')
+
+            # write out T
+            fname = os.path.join(prefix,'T')
+            print('Writing out',fname)
+            bc.write_data(fname,
+                          T.ravel(order='F'),
+                          patchName=bcname,
+                          timeName=tname,
+                          avgValue='0')
+
+            # write out k
+            fname = os.path.join(prefix,'k')
+            print('Writing out',fname)
+            bc.write_data(fname,
+                          time_varying_input['k'][itime,:,:].ravel(order='F'),
+                          patchName=bcname,
+                          timeName=tname,
+                          avgValue='0')
+
+
     def writeMappedBC(self,
             outputdir='boundaryData',
             interval=1,
@@ -513,8 +613,7 @@ class InflowPlane(object):
             fname = outputdir + os.sep + 'points'
             print('Writing',fname)
             with open(fname,'w') as f:
-                f.write(pointsheader.format(patchName=bcname))
-                f.write('{:d}\n(\n'.format(NY*NZ))
+                f.write(bc.pointsheader.format(patchName=bcname,N=NY*NZ))
                 for k in range(NZ):
                     for j in range(NY):
                         f.write('({:f} {:f} {:f})\n'.format(xinlet,y[j],z[k]))
@@ -561,8 +660,11 @@ class InflowPlane(object):
                 u = self.inletMean.addUmean(u)
 
                 with open(fname,'w') as f:
-                    f.write(dataheader.format(patchType='vector',patchName=bcname,timeName=tname,avgValue='(0 0 0)'))
-                    f.write('{:d}\n(\n'.format(NY*NZ))
+                    f.write(bc.dataheader.format(patchType='vector',
+                                                 patchName=bcname,
+                                                 timeName=tname,
+                                                 avgValue='(0 0 0)',
+                                                 N=NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
                             f.write('({v[0]:f} {v[1]:f} {v[2]:f})\n'.format(v=u[:,jidx[j],kidx[k]]))
@@ -578,8 +680,11 @@ class InflowPlane(object):
                 theta = self.inletMean.addTmean(theta)
 
                 with open(fname,'w') as f:
-                    f.write(dataheader.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
-                    f.write('{:d}\n(\n'.format(NY*NZ))
+                    f.write(bc.dataheader.format(patchType='scalar',
+                                                 patchName=bcname,
+                                                 timeName=tname,
+                                                 avgValue='0',
+                                                 N=NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
                             f.write('{s:f}\n'.format(s=theta[jidx[j],kidx[k]]))
@@ -591,8 +696,11 @@ class InflowPlane(object):
                 if not stdout=='overwrite':
                     sys.stdout.write('Writing {} (itime={})\n'.format(fname,itime))
                 with open(fname,'w') as f:
-                    f.write(dataheader.format(patchType='scalar',patchName=bcname,timeName=tname,avgValue='0'))
-                    f.write('{:d}\n(\n'.format(NY*NZ))
+                    f.write(bc.dataheader.format(patchType='scalar',
+                                                 patchName=bcname,
+                                                 timeName=tname,
+                                                 avgValue='0',
+                                                 N=NY*NZ))
                     for k in range(NZ):
                         for j in range(NY):
                             f.write('{s:f}\n'.format(s=self.inletMean.kinlet[kidx[k]]))

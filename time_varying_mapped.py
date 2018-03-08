@@ -51,7 +51,7 @@ class Inlet(object):
             # Inflow format is assumed to be OpenFOAM's timeVaryingMapped BC;
             # a 'points' file will be read
             self.inflowSourceDir = sourceDir
-            y,z = bc.readBoundaryPoints(os.path.join(sourceDir,'points'))
+            y,z = bc.read_boundary_points(os.path.join(sourceDir,'points'))
             self.y_planar = y
             self.z_planar = z
             if not np.all(self.y == self.y_planar):
@@ -282,12 +282,12 @@ class Inlet(object):
         self.T_planar = np.zeros((NY,NZ))
 
         if readU:
-            vdata = bc.readVectorData(self.Useries[itime],NY=NY,NZ=NZ)
+            vdata = bc.read_vector_data(self.Useries[itime],NY=NY,NZ=NZ)
             self.U_planar[:,:] = vdata[0,:,:]
             self.V_planar[:,:] = vdata[1,:,:]
             self.W_planar[:,:] = vdata[2,:,:]
         if readT:
-            self.T_planar[:,:] = bc.readScalarData(self.Tseries[itime],NY=NY,NZ=NZ)
+            self.T_planar[:,:] = bc.read_scalar_data(self.Tseries[itime],NY=NY,NZ=NZ)
 
         self.setupInterpolated2D()
 
@@ -309,11 +309,11 @@ class Inlet(object):
 
         for itime,ti in enumerate(self.timeseries):
             print('Processing mean inflow at t=',ti,':')
-            vdata = bc.readVectorData(self.Useries[itime],NY=NY,NZ=NZ)
+            vdata = bc.read_vector_data(self.Useries[itime],NY=NY,NZ=NZ)
             self.U_planar[itime,:,:] = vdata[0,:,:]
             self.V_planar[itime,:,:] = vdata[1,:,:]
             self.W_planar[itime,:,:] = vdata[2,:,:]
-            self.T_planar[itime,:,:] = bc.readScalarData(self.Tseries[itime],NY=NY,NZ=NZ)
+            self.T_planar[itime,:,:] = bc.read_scalar_data(self.Tseries[itime],NY=NY,NZ=NZ)
 
         self.interpTime = True
         self.setupInterpolated3D()
