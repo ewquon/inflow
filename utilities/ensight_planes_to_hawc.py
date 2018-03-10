@@ -11,7 +11,7 @@
 from __future__ import print_function
 import numpy as np
 
-from waketracking.dataloaders import foam_ensight_array # TODO: move this to NWTC/datatools
+from NWTC.datatools.dataloaders import foam_ensight_array
 from FAST.InflowWind import input_template
 from datatools.binario import binaryfile
 
