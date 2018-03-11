@@ -457,7 +457,8 @@ class InflowPlane(object):
                         time_varying_input=None,
                         bcname='west',
                         xinlet=0.0,
-                        tstart=0.0):
+                        tstart=0.0,
+                        periodic=False):
         """For use with OpenFOAM's timeVaryingMappedFixedValue boundary
         condition.  This will create a points file and time directories
         in 'outputdir', which should be placed in
@@ -511,11 +512,16 @@ class InflowPlane(object):
             if not os.path.isdir(prefix):
                 os.makedirs(prefix)
 
+            if periodic:
+                itime0 = np.mod(itime, self.N)
+            else:
+                itime0 = itime
+            u[:,:] = self.U[0,itime0,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
+            v[:,:] = self.U[1,itime0,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
+            w[:,:] = self.U[2,itime0,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
+            T[:,:] = self.T[itime0,:NY,:NZ] # self.T.shape == (self.NT, self.NY, self.NZ)
+
             # scale fluctuations
-            u[:,:] = self.U[0,itime,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
-            v[:,:] = self.U[1,itime,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
-            w[:,:] = self.U[2,itime,:NY,:NZ] # self.U.shape == (3, self.NT, self.NY, self.NZ)
-            T[:,:] = self.T[itime,:NY,:NZ] # self.T.shape == (self.NT, self.NY, self.NZ)
             for iz in range(NZ): # note: u is the original size
                 u[:,iz] *= self.scaling[0,iz]
                 v[:,iz] *= self.scaling[1,iz]

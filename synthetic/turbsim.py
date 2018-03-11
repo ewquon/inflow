@@ -10,7 +10,7 @@ import time
 import numpy as np
 
 from inflow.translator import InflowPlane
-from binario import binaryfile
+from NWTC.datatools.binario import binaryfile
 
 #from memory_profiler import profile #-- THIS IS SLOW
 # faster to uncomment the @profile lines and then run from the command line:
