@@ -1,6 +1,9 @@
 Inflow Processing Module
 ========================
 
+*DEPRECATED* This module has moved to the [NWTC ABL Python tool suite](https://github.com/NWTC/abl).
+
+
 This Python module should be used to prepare a time-varying Dirichlet boundary
 for a high-fidelity CFD analysis (e.g., a microscale large-eddy simulation using
 SOWFA). 
